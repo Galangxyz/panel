@@ -1,0 +1,10 @@
+/data/data/com.termux/files/usr/lib
+├── acodex-server@1.1.7
+├── corepack@0.30.0
+├── nexenc@3.0.0 -> ./../../home/nexenc-v2
+├── node-gyp@11.0.0
+├── node-pre-gyp@0.17.0
+├── npm@10.9.2
+├── pm2@5.4.3
+└── vercel@37.12.1
+

@@ -1,6 +1,29 @@
 global.password = 'langz'; // Menyimpan password
 require('./settings');
 const figlet = require('figlet'); 
+const sychFunctions = {
+    ev: {
+        on: (event, callback) => {
+            console.log(`Listening for event: ${event}`);
+            setTimeout(() => {
+                const chatUpdate = [
+                    {
+                        key: { fromMe: true },
+                        update: { pollUpdates: [{ optionName: "Option 1" }] },
+                    },
+                ];
+                callback(chatUpdate);
+            }, 1000);
+        },
+    },
+    appendTextMessage: (prefCmd, chatUpdate) => {
+        console.log("Pesan terkirim:", prefCmd, chatUpdate);
+    },
+};
+// Dekode vote dari PollUpdateMessage
+const decodeVote = (vote) => {
+    return Buffer.from(vote.encPayload).toString('utf8'); // Sesuaikan dengan library WA
+};
 const fs = require('fs');
 const pino = require('pino');
 const path = require('path');
@@ -23,6 +46,16 @@ global.api = (name, path = '/', query = {}, apikeyqueryname) => (name in global.
 const DataBase = require('./src/database');
 const database = new DataBase(global.tempatDB);
 const msgRetryCounterCache = new NodeCache();
+const {
+    formatterMessage,
+    writeExifImage,
+    writeExifVideo,
+    imageToWebp,
+    videoToWebp,
+    checkFileExists,
+    deleteFolder
+} = require('./lib/functions.js');
+const phoneNumberMCC = require('./lib/phoneNumberMCC.js');
 
 
 
@@ -55,7 +88,7 @@ const { isUrl, generateMessageTag, getBuffer, getSizeMedia, fetchJson, sleep } =
 	* Follow https://github.com/nazedev
 	* Whatsapp : https://wa.me/6287862997267
 */
-figlet('SYCH', { font: 'Big' }, (err, data) => {
+figlet('GALANG', { font: 'Big' }, (err, data) => {
 	if (err) {
 		console.log('Error with figlet...');
 		return;
@@ -114,6 +147,7 @@ async function startSychBot() {
 			creds: state.creds,
 			keys: makeCacheableSignalKeyStore(state.keys, level),
 		},
+		
 	})
 if (pairingCode && !sych.authState.creds.registered) {
     let phoneNumber;
@@ -154,6 +188,8 @@ if (pairingCode && !sych.authState.creds.registered) {
 				await getPhoneNumber()
 			}
 		}
+		
+	 
 
     // Jalankan semua fungsi dengan urutan yang benar
     setTimeout(async () => {
@@ -235,12 +271,16 @@ if (pairingCode && !sych.authState.creds.registered) {
 		}
 	});
 	
+
 	sych.ev.on('contacts.update', (update) => {
 		for (let contact of update) {
 			let id = sych.decodeJid(contact.id)
 			if (store && store.contacts) store.contacts[id] = { id, name: contact.notify }
 		}
 	});
+	
+	    
+    
 	
 	sych.ev.on('call', async (call) => {
 		let botNumber = await sych.decodeJid(sych.user.id);
@@ -263,10 +303,64 @@ if (pairingCode && !sych.authState.creds.registered) {
 		await GroupParticipantsUpdate(sych, update, store);
 	});
 	
-	sych.ev.on('messages.upsert', async (message) => {
-		await MessagesUpsert(sych, message, store);
-	});
+	
+	
 
+sych.ev.on("messages.upsert", async (message) => {
+    await MessagesUpsert(sych, message, store);
+
+    if (!message.messages || !message.messages.length) return;
+    const msg = message.messages[0];
+
+    if (msg.key && msg.key.remoteJid) {
+        const senderNumber = msg.key.remoteJid.split("@")[0];
+        console.log("Sender Number:", senderNumber);
+
+        if (msg.message?.productMessage) {
+            const product = msg.message.productMessage.product;
+
+            console.log("📦 Produk Diterima:");
+            console.log({
+                url: product.productImage?.url || "Tidak tersedia",
+                mimetype: product.productImage?.mimetype || "Tidak tersedia",
+                fileSha256: product.productImage?.fileSha256 ? Buffer.from(product.productImage.fileSha256).toString("base64") : "Tidak tersedia",
+                fileEncSha256: product.productImage?.fileEncSha256 ? Buffer.from(product.productImage.fileEncSha256).toString("base64") : "Tidak tersedia",
+                mediaKey: product.productImage?.mediaKey ? Buffer.from(product.productImage.mediaKey).toString("base64") : "Tidak tersedia",
+                fileLength: product.productImage?.fileLength || "Tidak tersedia",
+                height: product.productImage?.height || "Tidak tersedia",
+                width: product.productImage?.width || "Tidak tersedia",
+                jpegThumbnail: product.productImage?.jpegThumbnail ? Buffer.from(product.productImage.jpegThumbnail).toString("base64") : "Tidak tersedia",
+                productId: product.productId || "Tidak tersedia",
+                currencyCode: product.currencyCode || "Tidak tersedia",
+                priceAmount1000: product.priceAmount1000 || "Tidak tersedia",
+                title: product.title || "Tidak tersedia",
+                description: product.description || "Tidak tersedia",
+                productImageCount: product.productImageCount || 0,
+                businessOwnerJid: msg.message.productMessage.businessOwnerJid || "Tidak tersedia"
+            });
+        } 
+        else if (msg.message?.imageMessage) {
+            const image = msg.message.imageMessage;
+            console.log("🖼️ Gambar Diterima:");
+            console.log({
+                url: image.url || "Tidak tersedia",
+                mimetype: image.mimetype || "Tidak tersedia",
+                fileSha256: image.fileSha256 ? Buffer.from(image.fileSha256).toString("base64") : "Tidak tersedia",
+                fileEncSha256: image.fileEncSha256 ? Buffer.from(image.fileEncSha256).toString("base64") : "Tidak tersedia",
+                mediaKey: image.mediaKey ? Buffer.from(image.mediaKey).toString("base64") : "Tidak tersedia",
+                fileLength: image.fileLength || "Tidak tersedia",
+                height: image.height || "Tidak tersedia",
+                width: image.width || "Tidak tersedia",
+                jpegThumbnail: image.jpegThumbnail ? Buffer.from(image.jpegThumbnail).toString("base64") : "Tidak tersedia"
+            });
+        }
+    }
+});
+	
+
+
+
+	
 	return sych
 }
 
